@@ -15,6 +15,10 @@ async function explorerApi(action,params){
 }
 function openExplorer(path=''){
  if(!project)return;
+ if(window.innerWidth>1180){
+  railCollapsed=false;railTab='files';
+  explorerLoad(path);saveWorkplace();return;
+ }
  rememberResourceOrigin();
  stopRealtime();view='files';openMenu=null;profileMenuOpen=false;
  explorerLoad(path);
@@ -23,16 +27,16 @@ function openExplorer(path=''){
 async function explorerLoad(path=''){
  const seq=++explorerRequest,id=project;
  explorer={project:id,path,items:[],loading:true,error:'',hasMore:false};
- if(view==='files')render();
+ if(view==='files'||railFileVisible())render();
  try{
   const results=await explorerApi('list',{project:id,path});
-  if(seq!==explorerRequest||id!==project||view!=='files')return;
+  if(seq!==explorerRequest||id!==project)return;
   explorer={project:id,path,items:results.items||[],loading:false,error:'',hasMore:!!results.hasMore};
  }catch(error){
-  if(seq!==explorerRequest||id!==project||view!=='files')return;
+  if(seq!==explorerRequest||id!==project)return;
   explorer={...explorer,loading:false,error:String(error.message||error)};
  }
- if(view==='files'){render();const scroll=workspaceState?.scroll||0;requestAnimationFrame(()=>{const pane=root.querySelector('.explorerPane');if(pane&&view==='files')pane.scrollTop=scroll})}
+ if(view==='files'||railFileVisible()){render();if(view==='files'){const scroll=workspaceState?.scroll||0;requestAnimationFrame(()=>{const pane=root.querySelector('.explorerPane');if(pane&&view==='files')pane.scrollTop=scroll})}}
 }
 async function explorerMkdir(){
  const name=prompt('Название новой папки');
@@ -40,7 +44,7 @@ async function explorerMkdir(){
  const value=name.trim();if(!value)return;
  if(/[\\/:*?"<>|\x00-\x1f]/.test(value)||value==='.'||value==='..'||value.endsWith('.'))return alert('Недопустимое имя папки');
  const id=project,path=explorer.path;
- try{await explorerApi('mkdir',{project:id,path,name:value});if(id===project&&view==='files')explorerLoad(path)}
+ try{await explorerApi('mkdir',{project:id,path,name:value});if(id===project&&(view==='files'||railFileVisible()))explorerLoad(path)}
  catch(error){alert(error.message||'Не удалось создать папку')}
 }
 

@@ -2,10 +2,11 @@
 const WORKSPACE_KEY='artae_workspace_v2_'+userId();
 let workspaceState={};
 try{workspaceState=JSON.parse(localStorage.getItem(WORKSPACE_KEY)||'{}')||{}}catch{}
-let railFiles=[],railProject=null,railLoading=false;
+let railProject=null,railLoading=false;
+let railTab=workspaceState.railTab||'files';
 let railCollapsed=!!workspaceState.railCollapsed;
-let railWidth=Math.max(230,Math.min(410,Number(workspaceState.railWidth)||280));
-document.documentElement.style.setProperty('--rail-width',railWidth+'px');
+let railWidth=workspaceState.railModeVersion===2?Math.max(0,Number(workspaceState.railWidth)||0):0;
+if(railWidth)document.documentElement.style.setProperty('--rail-width',railWidth+'px');
 let pinsLoading=false,pinsUnavailable=false,pinsVersion='';
 let resourceReturn=null;
 function rememberResourceOrigin(){
@@ -27,7 +28,7 @@ function saveWorkplace(){
   workspaceState={...old,project:project||null,convo:convo||null,view,
    path:view==='files'?explorer.path:(old.path||''),
    scroll:view==='files'?(pane?.scrollTop||0):(old.scroll||0),
-   railCollapsed,railWidth};
+   railCollapsed,railWidth,railTab,railModeVersion:2};
   localStorage.setItem(WORKSPACE_KEY,JSON.stringify(workspaceState));
  }catch{}
 }
@@ -86,40 +87,52 @@ async function updateRemoteNote(id,note){
 }
 async function refreshRailFiles(){
  if(!project||railLoading)return;
- const id=project;railProject=id;railLoading=true;
- try{
-  const result=await explorerApi('list',{project:id,path:''});
-  if(id!==project)return;
-  railFiles=(result.items||[]).filter(x=>x.type==='file').sort((a,b)=>String(b.modified||'').localeCompare(String(a.modified||''))).slice(0,7);
-  if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
- }catch(e){console.warn('Project files summary:',e.message);railFiles=[]}
+ const id=project;
+ railProject=id;
+ if(explorer.project===id)return;
+ railLoading=true;
+ try{await explorerLoad('')}
+ catch(e){console.warn('Project files:',e.message)}
  finally{railLoading=false}
 }
 function railPins(scope){
  const id=scope==='project'?project:convo;
  if(scope==='convo'&&(!id||!data.convos.some(c=>c.id===id&&c.project===project)))return [];
- return data.pins.filter(p=>p.project===project&&p.scope===scope&&p.scopeId===id).slice(0,7);
+ return data.pins.filter(p=>p.project===project&&p.scope===scope&&p.scopeId===id);
 }
-function railPanel(title,icon,items,scope){
- const collapsed=!!workspaceState['collapsed_'+scope];
- const head='<button type="button" class="railSectionTitle" data-act="railSection" data-scope="'+scope+'" title="'+(collapsed?'Развернуть':'Свернуть')+'"><span>'+icon+' '+title+'</span><span aria-hidden="true">'+(collapsed?'▸':'▾')+'</span></button>';
- return '<section class="railSection">'+head+(collapsed?'':'<div class="railSectionBody">'+(items||'<p class="railEmpty">Пока пусто</p>')+'</div>')+'</section>';
+
+function visibleRailTabs(){
+ const tabs=['files'];
+ if(railPins('project').length)tabs.push('project');
+ if(railPins('convo').length)tabs.push('convo');
+ return tabs;
+}
+function activeRailTab(){
+ const available=visibleRailTabs();
+ if(!available.includes(railTab))railTab='files';
+ return railTab;
+}
+function railFileVisible(){
+ return !!project && view!=='files' && !railCollapsed && activeRailTab()==='files' && window.innerWidth>1180;
+}
+function railPinRows(scope){
+ return railPins(scope).map(p=>{
+  const isFile=p.kind==='file',title=p.previewText||p.item;
+  const act=isFile?'filesPreview':'railJumpPin';
+  return '<div class="railPinRow"><button type="button" class="railPinnedItem" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'" title="'+(isFile?'Открыть файл':'Перейти к сообщению')+'">'+(isFile?'📄 ':'📌 ')+esc(title)+'</button><button type="button" class="railMini" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить" aria-label="Открепить">×</button></div>';
+ }).join('');
 }
 function desktopRail(){
  if(view==='files'||!project)return '';
- const files=railProject===project?railFiles:[];
- const pinWarning=pinsUnavailable?'<p class="railEmpty" role="status">Общие закрепления пока недоступны: проверьте таблицу PostgreSQL.</p>':'';
- const fileRows=files.map(f=>'<div class="railItem"><button type="button" class="railItemName" data-act="filesPreview" data-path="'+esc(f.path)+'" data-name="'+esc(f.name)+'" data-mime="'+esc(f.mimeType||'')+'" title="Посмотреть файл">'+esc(f.name)+'</button><button type="button" class="railMini" data-act="filesDownload" data-path="'+esc(f.path)+'" data-name="'+esc(f.name)+'" aria-label="Скачать '+esc(f.name)+'">↓</button></div>').join('');
- const cards=scope=>railPins(scope).map(p=>{
-  const content=p.previewText||p.item;
-  const act=p.kind==='file'?'filesPreview':'railJumpPin';
-  return '<button class="railPinnedItem" type="button" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'">'+(p.kind==='file'?'📄 ':'📌 ')+esc(content.slice(0,110))+'</button>';
- }).join('');
- return '<div class="desktopRailGrip" data-act="railResize" role="separator" aria-label="Изменить ширину правой панели"></div><aside class="desktopRail"><div class="railTop"><strong>Материалы</strong><button class="railMini" type="button" data-act="railCollapse" title="Свернуть правую панель">☷</button></div>'+
- (railCollapsed?'':pinWarning+railPanel('Файлы проекта','📁',fileRows+'<button type="button" class="railAll" data-act="filesHome">Все файлы</button>','files')+
- railPanel('Закрепления проекта','📌',cards('project')+'<button type="button" class="railAll" data-act="pins" data-scope="project">Все закрепления</button>','project')+
- railPanel('Закрепления разговора','📌',convo&&data.convos.some(c=>c.id===convo&&c.project===project)?cards('convo')+'<button type="button" class="railAll" data-act="pins" data-scope="convo">Все закрепления</button>':'<p class="railEmpty">Выберите разговор</p>','convo'))+
- '</aside>';
+ const tab=activeRailTab(),names={files:'Файлы',project:'Закрепления проекта',convo:'Закрепления разговора'};
+ const buttons=visibleRailTabs().map(key=>'<button type="button" role="tab" aria-selected="'+(tab===key)+'" class="railTab'+(tab===key?' selected':'')+'" data-act="railTab" data-tab="'+key+'" title="'+names[key]+'">'+(key==='files'?'📁 ': '📌 ')+names[key]+'</button>').join('');
+ const warning=pinsUnavailable?'<p class="railEmpty" role="status">Не удалось загрузить закрепления</p>':'';
+ let content='';
+ if(tab==='files')content=filesView();
+ else content='<div class="railPinsFull">'+railPinRows(tab)+'</div>';
+ return '<div class="desktopRailGrip" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Изменить ширину чата и правой колонки"></div><aside class="desktopRail">'+
+ '<div class="railTabsBar"><div class="railTabs" role="tablist" aria-label="Материалы проекта">'+buttons+'</div><button type="button" class="railMini railToggle" data-act="railCollapse" title="Свернуть панель" aria-label="Свернуть панель">◧</button></div>'+
+ (railCollapsed?'':warning+'<div class="railTabContent" role="tabpanel">'+content+'</div>')+'</aside>';
 }
 async function railJumpPin(item,targetConvo){
  if(!targetConvo)return alert('Исходный разговор недоступен');
@@ -135,16 +148,27 @@ window.addEventListener('pagehide',saveWorkplace);
 let lastRailProject=null;
 root.addEventListener('click',()=>queueMicrotask(()=>{
  saveWorkplace();
- if(project!==lastRailProject){lastRailProject=project;railProject=null;railFiles=[];pinsVersion='';data.pins=[];refreshPins();}
+ if(project!==lastRailProject){lastRailProject=project;railProject=null;pinsVersion='';data.pins=[];refreshPins();}
  if(project&&railProject!==project)refreshRailFiles();
 }));
 root.addEventListener('pointerdown',e=>{
  const grip=e.target.closest('.desktopRailGrip');
- if(!grip||window.innerWidth<1180)return;
+ if(!grip||window.innerWidth<=1180||railCollapsed)return;
  e.preventDefault();
  let active=true;
- const move=ev=>{if(!active)return;railWidth=Math.max(230,Math.min(410,window.innerWidth-ev.clientX));document.documentElement.style.setProperty('--rail-width',railWidth+'px')};
+ const move=ev=>{if(!active)return;const split=root.querySelector('.split');if(!split)return;
+  const rect=split.getBoundingClientRect(),conversationWidth=layoutSizes.conversations||250;
+  const available=Math.max(560,rect.width-conversationWidth);
+  railWidth=Math.round(Math.max(280,Math.min(available-280,rect.right-ev.clientX)));
+  document.documentElement.style.setProperty('--rail-width',railWidth+'px');
+ };
  const stop=()=>{active=false;window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',stop);saveWorkplace()};
  window.addEventListener('pointermove',move);window.addEventListener('pointerup',stop,{once:true});
+});
+root.addEventListener('keydown',e=>{
+ if(e.target?.classList?.contains('desktopRailGrip')&&['ArrowLeft','ArrowRight'].includes(e.key)){
+  e.preventDefault();railWidth=Math.max(280,(railWidth||Math.round(window.innerWidth*.32))+(e.key==='ArrowLeft'?20:-20));
+  document.documentElement.style.setProperty('--rail-width',railWidth+'px');saveWorkplace();
+ }
 });
 setInterval(()=>{if(syncReady&&!document.hidden)refreshPins()},7000);
