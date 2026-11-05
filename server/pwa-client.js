@@ -6,6 +6,31 @@ const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||
 const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const inBrowser=()=>!isStandalone();
 const build=document.querySelector('meta[name="artae-build"]')?.content||'';
+const currentVersion=document.querySelector('meta[name="artae-version"]')?.content||'предыдущая сборка';
+let newest=null;
+async function refreshVersion(){
+ try{
+  const response=await fetch('/app-version.json',{cache:'no-store'});
+  if(!response.ok)throw Error('HTTP '+response.status);
+  const result=await response.json();
+  if(!result||typeof result.build!=='string'||!result.build)throw Error('Invalid build');
+  newest=result;
+  if(!build||build==='preview')return {status:'Текущая версия не определена; доступна '+result.version,newer:false};
+  if(result.build===build)return {status:'Установлена актуальная версия',newer:false};
+  return {status:'Доступна версия '+result.version+' · '+result.build.slice(0,8),newer:true};
+ }catch{return {status:'Не удалось проверить обновления',newer:false}}
+}
+async function activateUpdate(){
+ if(!newest)return;
+ const btn=dialog?.querySelector('.artaePwaInstall');if(btn)btn.disabled=true;
+ try{
+  const reg=await navigator.serviceWorker?.getRegistration();
+  await reg?.update();
+ }catch{}
+ // Bust cache-first HTML and JS requests without clearing user data.
+ const url=new URL(location.href);url.searchParams.set('app_build',newest.build.slice(0,12));
+ location.assign(url.pathname+url.search+url.hash);
+}
 const t=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt)e.textContent=txt;return e;};
 let dialog=null;
 function closeDialog(){if(!dialog)return;const old=dialog;dialog=null;old.remove();}
@@ -37,7 +62,18 @@ function showAppInfo(){
  }
  const explanation=t('p','artaePwaSmall','Статус показывает режим текущего окна. Он не означает, что приложение отсутствует на устройстве.');
  panel.append(explanation);
- if(build)panel.append(t('p','artaePwaSmall','Версия: '+build.slice(0,8)));
+ const versionLine=t('p','artaePwaSmall','Версия: '+currentVersion+(build?' · '+build.slice(0,8):''));
+ panel.append(versionLine);
+ const available=t('p','artaePwaSmall','Проверка обновлений…');panel.append(available);
+ const upgrade=t('button','artaePwaInstall','Обновить приложение');
+ upgrade.type='button';upgrade.hidden=true;upgrade.addEventListener('click',()=>activateUpdate());
+ panel.append(upgrade);
+ refreshVersion().then(info=>{
+   if(dialog?.contains(available)){
+     available.textContent=info.status;
+     upgrade.hidden=!info.newer;
+   }
+ }).catch(()=>{if(dialog?.contains(available))available.textContent='Не удалось проверить обновления';});
  dialog.append(panel);
  dialog.addEventListener('click',e=>{if(e.target===dialog)closeDialog()});
  document.addEventListener('keydown',onKey);

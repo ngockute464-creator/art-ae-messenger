@@ -13,3 +13,10 @@
   for = "/*"
   [headers.values]
     X-Robots-Tag = "noindex"
+
+# Always serve the build metadata from the network so installed PWA clients
+# can compare their shell version without caching stale release information.
+[[headers]]
+  for = "/app-version.json"
+  [headers.values]
+    Cache-Control = "no-store, max-age=0"

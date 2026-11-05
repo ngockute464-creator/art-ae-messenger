@@ -10,7 +10,7 @@ function close(){
 }
 async function openProjectDocument(path,name){
  if(active)return;
- if(!/\\.(docx|xlsx)$/i.test(name))return;
+ if(!/\.(docx|xlsx)$/i.test(name))return;
  const projectId=typeof project==='string'?project:null;
  if(!projectId)return;
  const overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
@@ -26,7 +26,7 @@ async function openProjectDocument(path,name){
  const frame=document.createElement('iframe');frame.className='artaeOfficeFrame';
  frame.title='VibeOffice — '+name;
  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads allow-modals');
- const kind=/\\.docx$/i.test(name)?'quire':'ledger';
+ const kind=/\.docx$/i.test(name)?'quire':'ledger';
  frame.src='/office/'+kind+'/';
  box.append(top,frame);overlay.append(box);
  const ctx={overlay,frame,message:null,buffer:null,name,projectId,ready:false,sent:false};active=ctx;
