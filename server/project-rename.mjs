@@ -42,13 +42,14 @@ async function diskMove(from,to){
  }
  throw err('Перемещение папки ещё выполняется. Проверьте результат перед повторным переименованием',409);
 }
-export async function renameProjectFolder({oldProject,name,db}){
+export async function renameProjectFolder({oldProject,name,db,avatarProvided=false,avatar=null}){
  const oldPath=validatePath(oldProject.folder_path);
  const newPath=folderForName(name);
  const wasMoved=oldPath!==newPath;
  if(wasMoved)await diskMove(oldPath,newPath);
  try{
   const patch={name,updated_at:Date.now()};
+  if(avatarProvided)patch.avatar=avatar;
   if(wasMoved)patch.folder_path=newPath;
   // Compare-and-set avoids a stale request from silently overwriting a changed path.
   const rows=await db('project',{id:'eq.'+oldProject.id,folder_path:'eq.'+oldPath,deleted_at:'is.null'},{
