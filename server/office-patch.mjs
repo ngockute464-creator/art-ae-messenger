@@ -20,8 +20,11 @@ try{
  for(const kind of ['quire','ledger']){
   const page='public/office/'+kind+'/index.html';
   let html=readFileSync(page,'utf8');
-  if(!html.includes('</body>'))throw Error('Office bridge: missing body');
-  html=html.replace('</body>',bridge+'\n</body>');
+  // Quire ends with </body>, while Ledger deliberately omits that optional tag.
+  // Insert after the editor app.js script, before the document end in both cases.
+  const anchor=html.match(/<\/body\s*>/i)?.[0]||html.match(/<\/html\s*>/i)?.[0];
+  if(!anchor)throw Error('Office bridge: no closing HTML anchor in '+kind);
+  html=html.replace(anchor,bridge+'\n'+anchor);
   writeFileSync(page,html);
  }
  copyFileSync('server/office-frame.js','public/office/artae-bridge.js');
