@@ -90,7 +90,7 @@ replaceOnce(
 
 writeFileSync(file,app);
 const sw='public/sw.js';
-let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-tabbed-rail-v8');
+let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-tabbed-rail-v9');
 writeFileSync(sw,worker);
 await import('../server/files-patch.mjs');
 // Reject stale or invalid generated client before publishing.
