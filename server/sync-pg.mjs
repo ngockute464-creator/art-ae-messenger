@@ -62,6 +62,33 @@ export default async function handler(req){
    const [projects,convos]=await Promise.all([db('project',{deleted_at:'is.null',select:'*',order:'created_at.asc'}),db('convo',{deleted_at:'is.null',select:'*',order:'created_at.asc'})]);
    return reply({projects:projects.map(projectView),convos:convos.filter(c=>projects.some(p=>p.id===c.project_id)).map(convoView)});
   }
+  if(action==='deletedProjects'&&req.method==='GET'){
+   if(session.user.role!=='admin')return reply({error:'Доступ только администратору'},403);
+   const deleted=await db('project',{deleted_at:'not.is.null',select:'id,name,deleted_at',order:'deleted_at.desc'});
+   return reply({projects:deleted.map(p=>({id:p.id,name:p.name,deletedAt:Number(p.deleted_at)}))});
+  }
+  if(action==='deleteProject'&&req.method==='POST'){
+   if(session.user.role!=='admin')return reply({error:'Доступ только администратору'},403);
+   if(!uuid(body.id))return reply({error:'Недопустимый проект'},400);
+   const current=await activeProject(body.id);
+   if(!current)return reply({error:'Проект не найден или уже удалён'},404);
+   if(typeof body.confirmName!=='string'||body.confirmName!==current.name)return reply({error:'Название проекта не совпадает'},400);
+   const stamp=time();
+   const rows=await db('project',{id:'eq.'+current.id,deleted_at:'is.null'},{method:'PATCH',body:{deleted_at:stamp,updated_at:stamp}});
+   if(rows.length!==1)return reply({error:'Проект уже изменён'},409);
+   return reply({ok:true,id:current.id});
+  }
+  if(action==='restoreProject'&&req.method==='POST'){
+   if(session.user.role!=='admin')return reply({error:'Доступ только администратору'},403);
+   if(!uuid(body.id))return reply({error:'Недопустимый проект'},400);
+   const p=await one('project',body.id);
+   if(!p||p.deleted_at===null)return reply({error:'Удалённый проект не найден'},404);
+   const active=await db('project',{deleted_at:'is.null',select:'id,name,folder_path'});
+   if(active.some(other=>other.name.toLocaleLowerCase('ru')===p.name.toLocaleLowerCase('ru')||other.folder_path===p.folder_path))return reply({error:'Существует активный проект с таким именем или папкой. Сначала устраните конфликт.'},409);
+   const rows=await db('project',{id:'eq.'+p.id,deleted_at:'not.is.null'},{method:'PATCH',body:{deleted_at:null,updated_at:time()}});
+   if(rows.length!==1)return reply({error:'Проект уже изменён'},409);
+   return reply({ok:true,project:projectView(rows[0])});
+  }
   if(action==='createProject'&&req.method==='POST'){
    const name=clean(body.name,100);if(!name)return reply({error:'Введите имя проекта'},400);
    const existing=await db('project',{deleted_at:'is.null',select:'id,name'});
