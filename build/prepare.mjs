@@ -3,6 +3,8 @@ import {copyFileSync,readFileSync,writeFileSync} from 'node:fs';
 copyFileSync('server/sync-pg.mjs','netlify/functions/sync.mjs');
 copyFileSync('server/realtime-token.mjs','netlify/functions/realtime-token.mjs');
 copyFileSync('server/jwt-standby-probe.mjs','netlify/functions/jwt-standby-probe.mjs');
+copyFileSync('netlify/functions/auth.mjs','netlify/functions/auth-disk.mjs');
+copyFileSync('server/auth-migrate.mjs','netlify/functions/auth-migrate.mjs');
 const file='public/app.js';
 let app=readFileSync(file,'utf8');
 function replaceOnce(before,after,label){
