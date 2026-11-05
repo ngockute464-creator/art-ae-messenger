@@ -90,4 +90,5 @@ writeFileSync(file,app);
 const sw='public/sw.js';
 let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-private-realtime-v1');
 writeFileSync(sw,worker);
+await import('../server/files-patch.mjs');
 console.log('ART-AE: private Realtime enabled with safe polling fallback');
