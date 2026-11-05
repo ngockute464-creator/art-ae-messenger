@@ -1,0 +1,9 @@
+[build]
+  command = "unzip -oq artae*.zip -d . && node build/prepare.mjs"
+  publish = "public"
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/storage-test.html"
+  [headers.values]
+    Cache-Control = "no-store"
