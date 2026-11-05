@@ -1,5 +1,5 @@
 [build]
-  command = "unzip -oq artae*.zip -d . && node build/prepare.mjs"
+  command = "unzip -oq artae.zip -d . && node build/prepare.mjs"
   publish = "public"
   functions = "netlify/functions"
 
@@ -7,3 +7,9 @@
   for = "/storage-test.html"
   [headers.values]
     Cache-Control = "no-store"
+
+# This branch is intended for private QA, not search indexing.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
