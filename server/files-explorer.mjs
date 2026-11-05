@@ -47,9 +47,15 @@ async function disk(method,path,params={},body){
  if(r.status===204||r.status===201&&!r.headers.get('content-length'))return {};
  return r.json();
 }
-function itemView(i,base){
- const relativePath=typeof i.path==='string'&&i.path.startsWith(base+'/')?i.path.slice(base.length+1):null;
- if(relativePath===null)return null;
+function itemView(i,parent){
+ // Resource paths returned by Yandex Disk may use a canonical namespace
+ // rather than the app:/ alias used to make the request. Never compare them.
+ // Build paths only from the current validated parent and safe direct-child name.
+ if(!i||typeof i.name!=='string'||!i.name||i.name.length>255||
+    i.name==='.'||i.name==='..'||/[\\/\x00-\x1f]/.test(i.name)||
+    (i.type!=='dir'&&i.type!=='file'))return null;
+ const relativePath=parent?parent+'/'+i.name:i.name;
+ if(relativePath.length>500)return null;
  return {name:i.name,type:i.type==='dir'?'folder':'file',path:relativePath,size:i.type==='file'?Number(i.size||0):null,modified:i.modified||null,mimeType:i.mime_type||null};
 }
 async function list(root,rel){
@@ -60,7 +66,7 @@ async function list(root,rel){
   if(d.type!=='dir')throw Object.assign(Error('Это не папка'),{status:400});
   const slice=d._embedded?.items||[];
   total=Number(d._embedded?.total||0);
-  for(const item of slice){const view=itemView(item,root);if(view)items.push(view)}
+  for(const item of slice){const view=itemView(item,rel);if(view)items.push(view)}
   offset+=slice.length;
   if(offset>=total||slice.length===0)break;
  }
