@@ -1,6 +1,7 @@
 // Reproducible build overlay. Keep released ZIP intact and swap only server adapter.
 import {copyFileSync,readFileSync,writeFileSync} from 'node:fs';
 copyFileSync('server/sync-pg.mjs','netlify/functions/sync.mjs');
+copyFileSync('server/realtime-token.mjs','netlify/functions/realtime-token.mjs');
 const file='public/app.js';
 let app=readFileSync(file,'utf8');
 function replaceOnce(before,after,label){
@@ -9,7 +10,7 @@ function replaceOnce(before,after,label){
 }
 replaceOnce(
   "setInterval(()=>{if(!document.hidden&&syncReady)syncMessages()},15000);",
-  "setInterval(()=>{if(!document.hidden&&syncReady)syncMessages()},5000);",
+  "setInterval(()=>{if(!document.hidden&&syncReady&&(!rtConnected||Date.now()-rtLastFallback>45000)){rtLastFallback=Date.now();syncMessages()}},5000);",
   'polling interval'
 );
 // Compare messages and update the message list only when it actually changed.
@@ -30,8 +31,31 @@ replaceOnce(
   "if((changed||!syncReady)&&!modal&&!editing&&document.activeElement?.id!=='draft')render()}",
   'overview focus guard'
 );
+
+const realtimeClient=readFileSync('server/realtime-client.js','utf8');
+replaceOnce('function cp(){',realtimeClient+'\nfunction cp(){','Realtime client');
+replaceOnce(
+  "function openChat(id){convo=id;highlightId=null;switchView('chat');syncMessages(true)}",
+  "function openChat(id){convo=id;highlightId=null;switchView('chat');syncMessages(true);connectRealtime(id)}",
+  'open private channel'
+);
+replaceOnce(
+  'function switchView(v){openMenu=null;view=v;render();',
+  "function switchView(v){if(v!=='chat')stopRealtime();openMenu=null;view=v;render();",
+  'close private channel on navigation'
+);
+replaceOnce(
+  "document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncOverview().catch(()=>{});syncMessages(true)}})",
+  "document.addEventListener('visibilitychange',()=>{if(document.hidden)stopRealtime();else{syncOverview().catch(()=>{});syncMessages(true);if(convo&&view==='chat')connectRealtime(convo)}})",
+  'resume after page visibility'
+);
+replaceOnce(
+  "view='chat';syncMessages(true);",
+  "view='chat';syncMessages(true);connectRealtime(convo);",
+  'join newly created conversation'
+);
 writeFileSync(file,app);
 const sw='public/sw.js';
-let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-postgres-focus-v2');
+let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-private-realtime-v1');
 writeFileSync(sw,worker);
-console.log('PostgreSQL adapter + non-destructive message refresh enabled');
+console.log('ART-AE: private Realtime enabled with safe polling fallback');
