@@ -1,6 +1,7 @@
 // Project file explorer: no credentials or Yandex URLs exposed to the browser.
 let explorer={project:null,path:'',items:[],loading:false,error:'',hasMore:false};
 let explorerRequest=0;
+const explorerLimit=3*1024*1024;
 async function explorerApi(action,params){
  const api='/.netlify/functions/files-explorer';
  const options={credentials:'same-origin',cache:'no-store'};
@@ -41,18 +42,48 @@ async function explorerMkdir(){
  try{await explorerApi('mkdir',{project:id,path,name:value});if(id===project&&view==='files')explorerLoad(path)}
  catch(error){alert(error.message||'Не удалось создать папку')}
 }
+
+async function explorerUpload(file){
+ if(!file)return;
+ if(file.size>explorerLimit)return alert('Максимальный размер файла — 3 МБ');
+ const id=project,path=explorer.path;
+ const button=root.querySelector('[data-act="filesUpload"]');if(button)button.disabled=true;
+ try{
+  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'upload',project:id,path,name:file.name});
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file,credentials:'same-origin',cache:'no-store'});
+  let data={};try{data=await r.json()}catch{}
+  if(!r.ok)throw Error(data.error||'Не удалось загрузить файл');
+  if(id===project&&view==='files')explorerLoad(path);
+ }catch(e){alert(e.message||'Не удалось загрузить файл')}
+ finally{if(button?.isConnected)button.disabled=false}
+}
+async function explorerDownload(path,name){
+ try{
+  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project,path});
+  const r=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+  if(!r.ok){let data={};try{data=await r.json()}catch{};throw Error(data.error||'Не удалось скачать файл')}
+  const blob=await r.blob();if(blob.size>explorerLimit)throw Error('Файл превышает лимит 3 МБ');
+  const href=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=href;link.download=name;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(href),30000);
+ }catch(e){alert(e.message||'Не удалось скачать файл')}
+}
+root.addEventListener('change',e=>{
+ if(e.target.id==='explorerUpload'){const file=e.target.files?.[0];e.target.value='';explorerUpload(file)}
+});
+
 function filesView(){
  if(explorer.project!==project)return '<section class="pane"><p class="help">Загрузка…</p></section>';
  const back=explorer.path?'<button type="button" class="btn small" data-act="filesUp">↑ На уровень выше</button>':'';
  const breadcrumbs=explorer.path?explorer.path.split('/').map(s=>' / '+esc(s)).join(''):'';
  const list=explorer.items.map(item=>{
   const isFolder=item.type==='folder',size=isFolder?'Папка':item.size==null?'':item.size<1024?item.size+' Б':item.size<1048576?(item.size/1024).toFixed(1)+' КБ':(item.size/1048576).toFixed(1)+' МБ';
-  const tag=isFolder?'button':'div';
-  const attrs=isFolder?' type="button" data-act="filesOpen" data-path="'+esc(item.path)+'"':'';
-  return '<'+tag+' class="fileEntry"'+attrs+'><span class="fileGlyph" aria-hidden="true">'+(isFolder?'📁':'📄')+'</span><span class="fileEntryName">'+esc(item.name)+'</span><span class="fileEntryMeta">'+esc(size)+'</span>'+(isFolder?'<span aria-hidden="true">›</span>':'')+'</'+tag+'>';
+  const tag='button';
+  const attrs=' type="button" data-act="'+(isFolder?'filesOpen':'filesDownload')+'" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'"';
+  return '<'+tag+' class="fileEntry"'+attrs+'><span class="fileGlyph" aria-hidden="true">'+(isFolder?'📁':'📄')+'</span><span class="fileEntryName">'+esc(item.name)+'</span><span class="fileEntryMeta">'+esc(size)+'</span>'+(isFolder?'<span aria-hidden="true">›</span>':'<span aria-hidden="true">↓</span>')+'</'+tag+'>';
  }).join('');
- const body=explorer.loading?'<div class="empty">Загрузка…</div>':explorer.error?'<div class="empty"><p>'+esc(explorer.error)+'</p><button class="btn" data-act="filesReload">Повторить</button></div>':list||'<div class="empty"><h3>Папка пуста</h3><p>Создай подпапку, чтобы организовать файлы.</p></div>';
- return '<section class="pane explorerPane"><div class="explorerToolbar"><div><h2>Файлы проекта</h2><p class="help explorerPath">'+esc(cp()?.name||'Проект')+breadcrumbs+'</p></div><button type="button" class="btn small primary" data-act="filesMkdir"'+(explorer.loading?' disabled':'')+'>＋ Папка</button></div>'+back+'<div class="explorerList">'+body+'</div>'+(explorer.hasMore?'<p class="help">Показана часть элементов папки.</p>':'')+'</section>';
+ const body=explorer.loading?'<div class="empty">Загрузка…</div>':explorer.error?'<div class="empty"><p>'+esc(explorer.error)+'</p><button class="btn" data-act="filesReload">Повторить</button></div>':list||'<div class="empty"><h3>Папка пуста</h3><p>Загрузите файл или создайте папку.</p></div>';
+ return '<section class="pane explorerPane"><div class="explorerToolbar"><div><h2>Файлы проекта</h2><p class="help explorerPath">'+esc(cp()?.name||'Проект')+breadcrumbs+'</p></div><div class="explorerActions"><input id="explorerUpload" type="file" hidden><button type="button" class="btn small" data-act="filesUpload"'+(explorer.loading?' disabled':'')+'>↑ Загрузить</button><button type="button" class="btn small primary" data-act="filesMkdir"'+(explorer.loading?' disabled':'')+'>＋ Папка</button></div></div>'+back+'<div class="explorerList">'+body+'</div>'+(explorer.hasMore?'<p class="help">Показана часть элементов папки.</p>':'')+'</section>';
 }
 
 async function trashProject(id){

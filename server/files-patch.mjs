@@ -17,7 +17,7 @@ replace("${view==='pins'||view==='projectpins'?pinsView():chatView()}",
         "${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}",
         'explorer workspace pane');
 replace("if(action==='project')openProject(id);",
-        "if(action==='filesHome')openExplorer();else if(action==='filesReload')explorerLoad(explorer.path);else if(action==='filesOpen')explorerLoad(el.dataset.path);else if(action==='filesUp')explorerLoad(explorer.path.split('/').slice(0,-1).join('/'));else if(action==='filesMkdir')explorerMkdir();else if(action==='project')openProject(id);",
+        "if(action==='filesHome')openExplorer();else if(action==='filesReload')explorerLoad(explorer.path);else if(action==='filesOpen')explorerLoad(el.dataset.path);else if(action==='filesUp')explorerLoad(explorer.path.split('/').slice(0,-1).join('/'));else if(action==='filesMkdir')explorerMkdir();else if(action==='filesUpload')root.querySelector('#explorerUpload')?.click();else if(action==='filesDownload')explorerDownload(el.dataset.path,el.dataset.name);else if(action==='project')openProject(id);",
         'explorer actions');
 replace("else if(view==='chat')switchView('conversations');else if(view==='conversations')switchView('projects');",
         "else if(view==='chat'||view==='files')switchView('conversations');else if(view==='conversations')switchView('projects');",
@@ -31,15 +31,9 @@ replace('${convoNav()}${view===',
         'conversation resizer');
 
 
-replace('<button class="add" data-act="newProject">＋ Создать проект</button></aside>',
-        '<button class="add" data-act="newProject">＋ Создать проект</button>\x24{window.ARTAE_AUTH?.getUser()?.role===\'admin\'?\'<button class="add" type="button" data-act="restoreProjects">Восстановить проект</button>\':\'\'}</aside>',
-        'admin trash navigation');
-replace('<button type="submit" class="btn primary">Сохранить</button>',
-        '\x24{modal.type===\'editProject\'&&window.ARTAE_AUTH?.getUser()?.role===\'admin\'?\'<button type="button" class="btn" data-act="trashProject" data-id="\'+esc(modal.id)+\'">Удалить проект</button>\':\'\'}<button type="submit" class="btn primary">Сохранить</button>',
-        'delete project in edit dialog');
-replace("if(action==='filesHome')openExplorer();",
-        "if(action==='trashProject')trashProject(id);else if(action==='restoreProjects')restoreProjectPicker();else if(action==='filesHome')openExplorer();",
-        'trash and restore actions');
+replace("<button type=\"button\" role=\"menuitem\" data-act=\"authUsers\">Пользователи</button>","<button type=\"button\" role=\"menuitem\" data-act=\"authUsers\">Пользователи</button><button type=\"button\" role=\"menuitem\" data-act=\"restoreProjects\">Восстановить проект</button>","admin restore menu");
+replace("<button type=\"submit\" class=\"btn primary\">Сохранить</button>","${modal.type==='editProject'&&window.ARTAE_AUTH?.getUser()?.role==='admin'?'<button type=\"button\" class=\"btn\" data-act=\"trashProject\" data-id=\"'+esc(modal.id)+'\">Удалить проект</button>':''}<button type=\"submit\" class=\"btn primary\">Сохранить</button>","project delete button");
+replace("if(action==='filesHome')openExplorer();","if(action==='trashProject')trashProject(id);else if(action==='restoreProjects')restoreProjectPicker();else if(action==='filesHome')openExplorer();","project archive handlers");
 
 writeFileSync(path,app);
 const cssFile='public/styles.css';
@@ -58,6 +52,7 @@ css+='\n'+[
 '.fileEntryName{flex:1;min-width:0;overflow-wrap:anywhere}',
 '.fileEntryMeta{flex:none;opacity:.65;font-size:12px}',
 '.explorerLink{margin-bottom:12px}',
+'.explorerActions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}',
 
 '.workspace{position:relative;grid-template-columns:var(--project-col-width,290px) minmax(0,1fr)}',
 '.split{position:relative;grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr)}',

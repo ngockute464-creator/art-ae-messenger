@@ -89,7 +89,7 @@ replaceOnce(
 
 writeFileSync(file,app);
 const sw='public/sw.js';
-let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-files-layout-v2');
+let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-files-transfer-v3');
 writeFileSync(sw,worker);
 await import('../server/files-patch.mjs');
 console.log('ART-AE: private Realtime enabled with safe polling fallback');

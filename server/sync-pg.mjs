@@ -91,8 +91,10 @@ export default async function handler(req){
   }
   if(action==='createProject'&&req.method==='POST'){
    const name=clean(body.name,100);if(!name)return reply({error:'Введите имя проекта'},400);
-   const existing=await db('project',{deleted_at:'is.null',select:'id,name'});
-   if(existing.some(p=>p.name.toLocaleLowerCase('ru')===name.toLocaleLowerCase('ru')))return reply({error:'Проект с таким названием уже существует'},409);
+   const existing=await db('project',{select:'id,name,folder_path,deleted_at'});
+   const targetPath=folderForName(name);
+   if(existing.some(p=>p.name.toLocaleLowerCase('ru')===name.toLocaleLowerCase('ru')||p.folder_path?.toLocaleLowerCase('ru')===targetPath.toLocaleLowerCase('ru')))
+    return reply({error:'Название или папка зарезервированы существующим либо удалённым проектом. Сначала восстановите его.'},409);
    const path=await projectFolder(name);
    const rows=await db('project',{}, {method:'POST',body:{id:randomUUID(),name,folder_path:path,created_by:session.user.id,created_at:time()}});
    return reply({project:projectView(rows[0])});
@@ -102,9 +104,9 @@ export default async function handler(req){
    const name=clean(body.name,100);if(!name)return reply({error:'Введите имя проекта'},400);
    if(body.avatar!==undefined&&!avatarOk(body.avatar))return reply({error:'Недопустимый аватар'},400);
    if(name!==current.name){
-    const projects=await db('project',{deleted_at:'is.null',select:'id,name,folder_path'});
+    const projects=await db('project',{select:'id,name,folder_path'});
     const targetPath=folderForName(name);
-    if(projects.some(p=>p.id!==current.id&&(p.name.toLocaleLowerCase('ru')===name.toLocaleLowerCase('ru')||p.folder_path.toLocaleLowerCase('ru')===targetPath.toLocaleLowerCase('ru'))))return reply({error:'Проект или папка с таким именем уже существует'},409);
+    if(projects.some(p=>p.id!==current.id&&(p.name.toLocaleLowerCase('ru')===name.toLocaleLowerCase('ru')||p.folder_path.toLocaleLowerCase('ru')===targetPath.toLocaleLowerCase('ru'))))return reply({error:'Название или папка уже заняты активным либо удалённым проектом'},409);
    }
    const updated=await renameProjectFolder({oldProject:current,name,db,avatarProvided:body.avatar!==undefined,avatar:body.avatar});
    return reply({project:projectView(updated)});

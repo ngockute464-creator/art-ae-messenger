@@ -1,7 +1,8 @@
-// ART-AE project file explorer API (stage 1).
+// ART-AE project file explorer API (folders and bounded file transfers).
 // Scoped to an existing project folder on Yandex Disk. No auth secrets in browser.
 import {getSession} from './auth.mjs';
 const YD='https://cloud-api.yandex.net/v1/disk';
+const MAX_TRANSFER=3*1024*1024;
 const uuid=x=>typeof x==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(x);
 const response=(x,status=200)=>Response.json(x,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const isOrigin=req=>{try{return new URL(req.headers.get('origin')).origin===new URL(req.url).origin}catch{return false}};
@@ -58,6 +59,45 @@ function itemView(i,parent){
  if(relativePath.length>500)return null;
  return {name:i.name,type:i.type==='dir'?'folder':'file',path:relativePath,size:i.type==='file'?Number(i.size||0):null,modified:i.modified||null,mimeType:i.mime_type||null};
 }
+
+function fileName(x){
+ if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
+ return x;
+}
+function transferUrl(href){
+ let u;try{u=new URL(href)}catch{}
+ if(!u||u.protocol!=='https:'||!/(^|\.)yandex\.(ru|net)$/.test(u.hostname)||u.username||u.password)throw Object.assign(Error('Недопустимый адрес передачи файла'),{status:502});
+ return u;
+}
+async function download(root,rel){
+ if(!rel)throw Object.assign(Error('Выберите файл'),{status:400});
+ const path=apiPath(root,rel);
+ const meta=await disk('GET','/resources',{path,fields:'name,type,size'});
+ if(meta.type!=='file')throw Object.assign(Error('Это не файл'),{status:400});
+ if(!Number.isFinite(meta.size)||meta.size<0||meta.size>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ const link=await disk('GET','/resources/download',{path});
+ const r=await fetch(transferUrl(link.href),{signal:AbortSignal.timeout(25000),redirect:'error'});
+ if(!r.ok)throw Object.assign(Error('Не удалось скачать файл'),{status:502});
+ const size=Number(r.headers.get('content-length'));
+ if(size>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ const bytes=await r.arrayBuffer();
+ if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ return new Response(bytes,{status:200,headers:{'Content-Type':'application/octet-stream','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(fileName(meta.name)),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
+}
+async function upload(root,rel,name,request){
+ const safe=fileName(name);
+ const length=Number(request.headers.get('content-length'));
+ if(Number.isFinite(length)&&length>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ const bytes=await request.arrayBuffer();
+ if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ const target=apiPath(root,rel?rel+'/'+safe:safe);
+ const link=await disk('GET','/resources/upload',{path:target,overwrite:'false'});
+ const r=await fetch(transferUrl(link.href),{method:link.method==='POST'?'POST':'PUT',body:bytes,headers:{'Content-Type':'application/octet-stream'},signal:AbortSignal.timeout(25000),redirect:'error'});
+ if(r.status===409||r.status===412)throw Object.assign(Error('Файл с таким именем уже существует'),{status:409});
+ if(!r.ok)throw Object.assign(Error('Не удалось загрузить файл'),{status:502});
+ return response({ok:true,path:rel?rel+'/'+safe:safe});
+}
+
 async function list(root,rel){
  const path=apiPath(root,rel);
  let offset=0;const items=[];let total=0;
@@ -74,18 +114,24 @@ async function list(root,rel){
 }
 export default async function handler(request){
  if(!['GET','POST'].includes(request.method))return response({error:'Method not allowed'},405);
- if(request.method==='POST'&&(!isOrigin(request)||!request.headers.get('content-type')?.startsWith('application/json')))return response({error:'Недопустимый запрос'},403);
+ if(request.method==='POST'&&!isOrigin(request))return response({error:'Недопустимый запрос'},403);
  try{
   const session=await getSession(request);if(!session)return response({error:'Требуется вход'},401);
   const url=new URL(request.url);let args={};
-  if(request.method==='POST'){try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}}
-  else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||''};
+  if(request.method==='POST'&&url.searchParams.get('action')==='upload'&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
+   args={action:'upload',project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name')};
+  }else if(request.method==='POST'){
+   if(!request.headers.get('content-type')?.startsWith('application/json'))return response({error:'Недопустимый формат запроса'},415);
+   try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}
+  }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||''};
   const p=await project(args.project);
   const rel=relative(args.path||'');
   if(args.action==='list'&&request.method==='GET'){
    const result=await list(p.folder_path,rel);
    return response({project:{id:p.id,name:p.name},path:rel,...result});
   }
+  if(args.action==='download'&&request.method==='GET')return await download(p.folder_path,rel);
+  if(args.action==='upload'&&request.method==='POST')return await upload(p.folder_path,rel,args.name,request);
   if(args.action==='mkdir'&&request.method==='POST'){
    const name=folderName(args.name);
    await disk('PUT','/resources',{path:apiPath(p.folder_path,rel?rel+'/'+name:name)});
