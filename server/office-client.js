@@ -36,6 +36,8 @@ function prewarmOfficeDocx(){
  window.addEventListener('message',ctx.listener);
  document.body.append(host);
 }
+// Expose only the optional warm-up function to the file browser.
+window.ARTAE_OFFICE_PREWARM=prewarmOfficeDocx;
 
 function close(){
  const a=active;if(!a)return;active=null;

@@ -27,7 +27,7 @@ function openExplorer(path=''){
 async function explorerLoad(path=''){
  const seq=++explorerRequest,id=project;
  // Begin preparing the DOCX editor immediately, without waiting for the file-list API.
- if(id)queueMicrotask(prewarmOfficeDocx);
+ // Optional editor preparation is scheduled after the file list is rendered.
  explorer={project:id,path,items:[],loading:true,error:'',hasMore:false};
  if(view==='files'||railFileVisible())render();
  try{
@@ -39,7 +39,10 @@ async function explorerLoad(path=''){
   explorer={...explorer,loading:false,error:String(error.message||error)};
  }
  if(view==='files'||railFileVisible()){render();if(view==='files'){const scroll=workspaceState?.scroll||0;requestAnimationFrame(()=>{const pane=root.querySelector('.explorerPane');if(pane&&view==='files')pane.scrollTop=scroll})}}
-
+ // Optional editor must never prevent file listing.
+ if(id&&id===project&&!explorer.error){
+  setTimeout(()=>{try{window.ARTAE_OFFICE_PREWARM?.()}catch(error){console.warn('DOCX warm-up:',error)}},750);
+ }
 }
 async function explorerMkdir(){
  const name=prompt('Название новой папки');
