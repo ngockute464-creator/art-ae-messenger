@@ -41,9 +41,26 @@ function close(){
  const a=active;if(!a)return;active=null;
  window.removeEventListener('message',a.message);
  a.overlay.remove();
- // Do not retain a previous document or its unsaved state in the warm editor.
- // Prepare a fresh DOCX instance only after the previous one is fully closed.
- if(a.kind==='quire')setTimeout(prewarmOfficeDocx,250);
+}
+function finishDocxClose(ctx){
+ if(active!==ctx)return;
+ active=null;
+ window.removeEventListener('message',ctx.message);
+ const host=ctx.overlay;
+ // The iframe never leaves its DOM parent; closing Quire resets to a fresh
+ // blank document before we hide it. Keep the ready engine for the next DOCX.
+ const header=host.querySelector('.artaeOfficeTop');
+ if(header)header.remove();
+ host.classList.remove('artaeOfficeWarmActive');
+ host.classList.add('artaeOfficeWarmHost');
+ const warm={host,frame:ctx.frame,ready:true,started:performance.now()};
+ warm.listener=event=>{
+  if(warmDocx!==warm||event.origin!==location.origin||event.source!==warm.frame.contentWindow)return;
+  if(event.data?.type==='artae-office-ready')warm.ready=true;
+ };
+ warmDocx=warm;
+ window.addEventListener('message',warm.listener);
+ console.info('[ART-AE Office] DOCX reset completed; ready instance retained');
 }
 async function openProjectDocument(path,name,projectId,localFile=null){
  if(active)return;
@@ -57,9 +74,21 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  const state=document.createElement('span');state.className='artaeOfficeState';state.textContent=localFile?'Читаем локальный файл…':'Загрузка файла…';
  const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent='Сохранение → скачивание копии';
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
- closeButton.addEventListener('click',()=>{if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close()});
+ closeButton.addEventListener('click',()=>{
+  if(kind==='quire'){
+   if(!active||active.closing)return;
+   active.closing=true;
+   closeButton.disabled=true;
+   state.textContent='Проверка несохранённых изменений…';
+   active.frame.contentWindow.postMessage({type:'artae-office-close'},location.origin);
+   active.closeTimer=setTimeout(()=>{
+    if(active&&active.closing){active.closing=false;closeButton.disabled=false;state.textContent='Не удалось закрыть документ. Повторите попытку.'}
+   },30000);
+  }else if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close();
+ });
  top.append(title,state,hint,closeButton);
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
+ if(kind==='quire'&&!warmDocx)prewarmOfficeDocx();
  const warm=kind==='quire'?warmDocx:null;
  const warmInfo=kind==='quire'?(warm?(warm.ready?'готов до клика':'запущен, но не готов'):'не запускался'):'не предусмотрен';
  const warmAge=warm?Math.round(performance.now()-warm.started):0;
@@ -81,7 +110,7 @@ async function openProjectDocument(path,name,projectId,localFile=null){
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge};active=ctx;
+ const ctx={overlay,frame,kind,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null};active=ctx;
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
@@ -91,6 +120,11 @@ async function openProjectDocument(path,name,projectId,localFile=null){
    console.info('[ART-AE Office] iframe ready after click',Math.round(ctx.readyAt-ctx.started),'ms');
    send();
   }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · файл '+(fileReady/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
+  else if(msg.type==='artae-office-close-result'){
+   clearTimeout(ctx.closeTimer);ctx.closeTimer=null;ctx.closing=false;closeButton.disabled=false;
+   if(msg.closed)finishDocxClose(ctx);
+   else state.textContent=msg.error?'Ошибка закрытия: '+String(msg.error).slice(0,140):'Закрытие отменено';
+  }
   else if(msg.type==='artae-office-error')state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
  };
  window.addEventListener('message',ctx.message);
