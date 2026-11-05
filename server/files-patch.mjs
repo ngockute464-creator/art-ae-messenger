@@ -7,7 +7,8 @@ const replace=(oldText,newText,label)=>{
  app=app.replace(oldText,newText);
 };
 const client=readFileSync('server/files-client.js','utf8');
-replace('function cp(){',client+'\nfunction cp(){','client functions');
+const resizeClient=readFileSync('server/layout-resize.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\nfunction cp(){','client and resize functions');
 replace('return '+b+'<aside class="convos">${convos().map',
         'return '+b+'<aside class="convos"><button class="add explorerLink" type="button" data-act="filesHome">📁 Файлы проекта</button>${convos().map',
         'project file navigation');
@@ -21,6 +22,14 @@ replace("if(action==='project')openProject(id);",
 replace("else if(view==='chat')switchView('conversations');else if(view==='conversations')switchView('projects');",
         "else if(view==='chat'||view==='files')switchView('conversations');else if(view==='conversations')switchView('projects');",
         'explorer back action');
+
+replace('${sidebar()}<main class="main">',
+        '${sidebar()}<div class="columnGrip projectGrip" data-resize="projects" role="separator" tabindex="0" aria-label="Ширина списка проектов" aria-orientation="vertical" title="Изменить ширину списка проектов"></div><main class="main">',
+        'project resizer');
+replace('${convoNav()}${view===',
+        '${convoNav()}<div class="columnGrip convoGrip" data-resize="conversations" role="separator" tabindex="0" aria-label="Ширина списка разговоров" aria-orientation="vertical" title="Изменить ширину списка разговоров"></div>${view===',
+        'conversation resizer');
+
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
@@ -38,6 +47,18 @@ css+='\n'+[
 '.fileEntryName{flex:1;min-width:0;overflow-wrap:anywhere}',
 '.fileEntryMeta{flex:none;opacity:.65;font-size:12px}',
 '.explorerLink{margin-bottom:12px}',
+
+'.workspace{position:relative;grid-template-columns:var(--project-col-width,290px) minmax(0,1fr)}',
+'.split{position:relative;grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr)}',
+'.columnGrip{position:absolute;top:0;bottom:0;width:10px;margin-left:-5px;z-index:5;cursor:col-resize;touch-action:none;background:transparent}',
+'.columnGrip:hover,.columnGrip:focus-visible,.resizingColumns .columnGrip{background:rgba(40,105,220,.14);outline:none}',
+'.columnGrip::after{content:"";position:absolute;left:4px;top:0;bottom:0;width:2px;background:transparent}',
+'.columnGrip:hover::after,.columnGrip:focus-visible::after{background:#5893e8}',
+'.projectGrip{left:var(--project-col-width,290px)}',
+'.convoGrip{left:var(--convo-col-width,250px)}',
+'.resizingColumns,.resizingColumns *{cursor:col-resize!important;user-select:none!important}',
+'@media(max-width:650px){.columnGrip{display:none}.app.mobile-files .sidebar,.app.mobile-files .convos{display:none}.app.mobile-files .main{display:flex;height:100%}.app.mobile-files .split{display:block;height:calc(100% - 55px)}.app.mobile-files .explorerPane{display:block;height:100%;overflow:auto}.app.mobile-files .explorerToolbar{align-items:center}}',
+
 '@media(max-width:720px){.explorerPane{padding:14px}.explorerToolbar h2{font-size:18px}.fileEntry{padding:12px 9px}}'
 ].join('\n');
 writeFileSync(cssFile,css);
