@@ -32,15 +32,15 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
  frame.src='/office/'+kind+'/';
  box.append(top,frame);overlay.append(box);
- const ctx={overlay,frame,message:null,buffer:null,name,projectId,ready:false,sent:false,started:performance.now(),sentAt:0};active=ctx;
+ const ctx={overlay,frame,message:null,buffer:null,name,projectId,ready:false,sent:false,started:performance.now(),sentAt:0,readyAt:0,fileAt:0};active=ctx;
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
   const msg=event.data;if(!msg||typeof msg.type!=='string')return;
   if(msg.type==='artae-office-ready'){
-   ctx.ready=true;
+   ctx.ready=true;ctx.readyAt=performance.now();
    send();
-  }else if(msg.type==='artae-office-opened'){const parseMs=Math.round(performance.now()-ctx.sentAt);state.textContent='Готово · разбор '+parseMs+' мс';console.info('[ART-AE Office] '+name+': preparation '+Math.round(ctx.sentAt-ctx.started)+' ms, editor processing '+parseMs+' ms');}
+  }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с';console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
   else if(msg.type==='artae-office-error')state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
  };
  window.addEventListener('message',ctx.message);
@@ -58,6 +58,7 @@ async function openProjectDocument(path,name,projectId,localFile=null){
   if(blob.size>3*1024*1024)throw Error('Файл превышает лимит теста 3 МБ');
   if(active!==ctx)return;
   ctx.buffer=await blob.arrayBuffer();
+  ctx.fileAt=performance.now();
   send();
  }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
 }
