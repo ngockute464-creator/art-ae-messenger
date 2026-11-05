@@ -44,6 +44,7 @@ async function projectFolder(name){
 function failed(e){
  if(e.status===503)return reply({error:'Хранилище не настроено'},503);
  if(e.status===400)return reply({error:e.message},400);
+ if(e.status===409)return reply({error:e.message},409);
  if(e.code==='23505')return reply({error:'Запись уже существует'},409);
  if(e.code==='23503')return reply({error:'Связанная запись не существует'},409);
  console.error('ARTAE PostgreSQL',e.status,e.code,e.message);
