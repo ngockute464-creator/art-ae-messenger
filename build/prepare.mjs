@@ -55,6 +55,30 @@ replaceOnce(
   "view='chat';syncMessages(true);connectRealtime(convo);",
   'join newly created conversation'
 );
+
+// Optimistic local sending: message appears immediately, while PostgreSQL remains the source of truth.
+// Repainting only #msgscroll is important: otherwise the composer loses focus.
+replaceOnce(
+  "if(result.initial)rows.clear();for(const m of result.messages)",
+  "if(result.initial){for(const [key,value] of rows){if(!value.pending)rows.delete(key)}}for(const m of result.messages)",
+  'preserve in-flight messages during background synchronization'
+);
+replaceOnce(
+  "function messageView(m){let fs=",
+  "function messageView(m){let fs=",
+  'message function presence'
+);
+replaceOnce(
+  "\${m.editedAt?' · Изменено':''}",
+  "\${m.editedAt?' · Изменено':''}\${m.pending?' · Отправляется…':''}",
+  'sending status'
+);
+replaceOnce(
+  "const btn=e.target.querySelector('button[type=submit]');if(btn?.disabled)return;if(btn){btn.disabled=true;btn.textContent='Отправляем…'}\\n d.requestId=d.requestText===v&&d.requestId?d.requestId:crypto.randomUUID();d.requestText=v;\\n syncApi('send',{convo:target,text:v,requestId:d.requestId}).then(r=>{if(!data.messages.some(x=>x.id===r.message.id))data.messages.push(r.message);drafts[target]={text:'',files:[]};render();syncMessages()}).catch(syncFail).finally(()=>{if(btn?.isConnected){btn.disabled=false;btn.textContent='Отправить'}})",
+  "const btn=e.target.querySelector('button[type=submit]');if(btn?.disabled)return;const requestId=d.requestId=d.requestText===v&&d.requestId?d.requestId:crypto.randomUUID();d.requestText=v;if(btn){btn.disabled=true;btn.textContent='Отправляем…'}const temp={id:requestId,convo:target,authorId:userId(),who:meName(),text:v,time:Date.now(),editedAt:null,deletedAt:null,pending:true};data.messages.push(temp);d.text='';const area=$('draft');if(area)area.value='';const refresh=()=>{if(convo!==target||view!=='chat')return;const list=$('msgscroll');if(!list||list.dataset.convo!==target)return;const atBottom=list.scrollHeight-list.scrollTop-list.clientHeight<90;list.innerHTML=data.messages.filter(m=>m.convo===target).sort((a,b)=>a.time-b.time||a.id.localeCompare(b.id)).map(messageView).join('');if(atBottom)list.scrollTop=list.scrollHeight;};refresh();syncApi('send',{convo:target,text:v,requestId}).then(r=>{data.messages=data.messages.filter(m=>m!==temp);if(!data.messages.some(m=>m.id===r.message.id))data.messages.push(r.message);delete d.requestId;delete d.requestText;refresh();syncMessages(true)}).catch(err=>{data.messages=data.messages.filter(m=>m!==temp);if(!getDraft().text&&convo===target){getDraft().text=v;if($('draft'))$('draft').value=v}else if(convo!==target&&!(drafts[target]?.text))drafts[target].text=v;refresh();syncFail(err)}).finally(()=>{if(btn?.isConnected){btn.disabled=false;btn.textContent='Отправить'}})"
+  ,'optimistic send'
+);
+
 writeFileSync(file,app);
 const sw='public/sw.js';
 let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-private-realtime-v1');
