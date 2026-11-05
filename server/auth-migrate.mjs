@@ -63,10 +63,20 @@ export default async function handler(request){
   }
   if(!sessions.some(s=>s.sid===session.sid))throw Error('Administrator session missing');
   if(sessions.some(s=>!users.some(u=>u.id===s.user_id)))throw Error('Session references unknown user');
-  const existing=await pg('artae_users','GET',{select:'id',limit:'100'});
-  if(existing.length)return reply({ok:false,error:'PostgreSQL accounts already exist; refusing to overwrite',existingUsers:existing.length},409);
-  const inserted=await pg('artae_users','POST',{on_conflict:'id'},users);
-  if(sessions.length)await pg('artae_sessions','POST',{on_conflict:'sid'},sessions);
+  const existing=await pg('artae_users','GET',{select:'id,key_hash,generation,role,disabled,name',limit:'100'});
+  // A partially completed import may safely be retried. Never overwrite changed accounts.
+  if(existing.some(row=>!users.some(u=>u.id===row.id&&u.key_hash===row.key_hash&&u.generation===row.generation&&u.role===row.role&&u.disabled===row.disabled&&u.name===row.name))){
+   return reply({ok:false,error:'Existing PostgreSQL accounts differ from legacy source; import halted'},409);
+  }
+  const missing=users.filter(u=>!existing.some(x=>x.id===u.id));
+  if(missing.length)await pg('artae_users','POST',{},missing);
+  // Existing sessions are left untouched; incomplete imports can be resumed.
+  const currentSessions=await pg('artae_sessions','GET',{select:'sid,user_id,generation,last_seen,created_at',limit:'1000'});
+  if(currentSessions.some(s=>!sessions.some(x=>x.sid===s.sid&&x.user_id===s.user_id&&x.generation===s.generation&&Number(x.last_seen)===Number(s.last_seen)&&Number(x.created_at)===Number(s.created_at)))){
+   return reply({ok:false,error:'Existing PostgreSQL sessions differ from source; import halted'},409);
+  }
+  const missingSessions=sessions.filter(s=>!currentSessions.some(x=>x.sid===s.sid));
+  if(missingSessions.length)await pg('artae_sessions','POST',{},missingSessions);
   const postUsers=await pg('artae_users','GET',{select:'id',limit:'100'});
   const postSessions=await pg('artae_sessions','GET',{select:'sid',limit:'1000'});
   const match=users.length===postUsers.length&&sessions.length===postSessions.length&&users.every(u=>postUsers.some(p=>p.id===u.id))&&sessions.every(s=>postSessions.some(p=>p.sid===s.sid));
