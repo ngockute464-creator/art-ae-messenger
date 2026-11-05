@@ -31,6 +31,26 @@ async function activateUpdate(){
  const url=new URL(location.href);url.searchParams.set('app_build',newest.build.slice(0,12));
  location.assign(url.pathname+url.search+url.hash);
 }
+async function refreshAppCache(button){
+ if(!confirm('Перезагрузить АРТ-АЕ и обновить кэш? Несохранённый текст в открытой форме может быть потерян.'))return;
+ button.disabled=true;button.textContent='Обновление…';
+ try{
+  // Do not clear localStorage, IndexedDB, cookies or application databases.
+  // Only remove versioned ART-AE application shell caches.
+  if('caches' in window){
+   const keys=await caches.keys();
+   await Promise.all(keys.filter(key=>key.startsWith('art-ae-')).map(key=>caches.delete(key)));
+  }
+  if('serviceWorker' in navigator){
+   const registration=await navigator.serviceWorker.getRegistration();
+   if(registration)await registration.update();
+  }
+  location.reload();
+ }catch(error){
+  button.disabled=false;button.textContent='Обновить кэш';
+  alert('Не удалось обновить кэш: '+(error?.message||error));
+ }
+}
 const t=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt)e.textContent=txt;return e;};
 let dialog=null;
 function closeDialog(){if(!dialog)return;const old=dialog;dialog=null;old.remove();}
@@ -64,6 +84,11 @@ function showAppInfo(){
  panel.append(explanation);
  const versionLine=t('p','artaePwaSmall','Версия: '+currentVersion+(build?' · '+build.slice(0,8):''));
  panel.append(versionLine);
+ const reloadCache=t('button','artaePwaCacheButton','Обновить кэш');
+ reloadCache.type='button';
+ reloadCache.addEventListener('click',()=>refreshAppCache(reloadCache));
+ panel.append(reloadCache);
+ panel.append(t('p','artaePwaSmall','Загрузит актуальные файлы интерфейса. Сообщения и документы на сервере не удаляются.'));
  const available=t('p','artaePwaSmall','Проверка обновлений…');panel.append(available);
  const upgrade=t('button','artaePwaInstall','Обновить приложение');
  upgrade.type='button';upgrade.hidden=true;upgrade.addEventListener('click',()=>activateUpdate());
@@ -94,6 +119,7 @@ const styles=t('style');styles.textContent=`
 .artaePwaStatus{font-weight:650;font-size:15px;margin:8px 0 14px}.artaePwaHint{font-size:14px;line-height:1.5;margin:0 0 12px}
 .artaePwaInstall{display:block;width:100%;border:0;border-radius:10px;background:#2769cc;color:#fff;font:600 15px system-ui;padding:13px;cursor:pointer}
 .artaePwaSmall{font-size:12px;line-height:1.4;opacity:.7;margin:13px 0 0}
+.artaePwaCacheButton{margin-top:12px;width:100%;border:1px solid #bdc9db;background:transparent;color:inherit;border-radius:10px;padding:12px;font:600 14px system-ui;cursor:pointer}.artaePwaCacheButton:disabled{opacity:.6;cursor:wait}
 `;
 document.head.append(styles);
 })();

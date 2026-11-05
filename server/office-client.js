@@ -2,6 +2,10 @@
 // Downloading a changed copy is handled by VibeOffice's built-in File > Save.
 (() => {
 'use strict';
+// Keep the copy-only editor handler unique even if a cached HTML shell loads
+// the legacy standalone script alongside the versioned app.js.
+if(window.__ARTAE_OFFICE_READY__)return;
+window.__ARTAE_OFFICE_READY__=true;
 let active=null;
 function close(){
  const a=active;if(!a)return;active=null;

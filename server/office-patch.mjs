@@ -37,6 +37,15 @@ if(!html.includes('</body>'))throw Error('Office: index changed');
 html=html.replace('</body>','<script src="office-client.js" defer></script></body>');
 writeFileSync(index,html);
 copyFileSync('server/office-client.js','public/office-client.js');
+// The file list and its click handler must travel in the SAME version of app.js.
+// Cached index.html may not include a newly introduced standalone script.
+const appFile='public/app.js';
+let merged=readFileSync(appFile,'utf8');
+const handler=readFileSync('server/office-client.js','utf8');
+if(!merged.includes('data-act="officeEdit"'))throw Error('Office button not included in app.js');
+merged+='\n'+handler+'\n';
+new Function(merged);
+writeFileSync(appFile,merged);
 // Client script is lazy by usage; only tiny bridge is loaded at application start.
 const swFile='public/sw.js';
 let sw=readFileSync(swFile,'utf8');
