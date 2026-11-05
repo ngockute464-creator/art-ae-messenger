@@ -26,6 +26,8 @@ function openExplorer(path=''){
 }
 async function explorerLoad(path=''){
  const seq=++explorerRequest,id=project;
+ // Begin preparing the DOCX editor immediately, without waiting for the file-list API.
+ if(id)queueMicrotask(prewarmOfficeDocx);
  explorer={project:id,path,items:[],loading:true,error:'',hasMore:false};
  if(view==='files'||railFileVisible())render();
  try{
@@ -37,9 +39,7 @@ async function explorerLoad(path=''){
   explorer={...explorer,loading:false,error:String(error.message||error)};
  }
  if(view==='files'||railFileVisible()){render();if(view==='files'){const scroll=workspaceState?.scroll||0;requestAnimationFrame(()=>{const pane=root.querySelector('.explorerPane');if(pane&&view==='files')pane.scrollTop=scroll})}}
- // Defer the optional office engine until the user has opened project files.
- // No document is fetched here; only the DOCX editor initializes.
- if(id&&id===project&&!explorer.error)setTimeout(prewarmOfficeDocx,0);
+
 }
 async function explorerMkdir(){
  const name=prompt('Название новой папки');
