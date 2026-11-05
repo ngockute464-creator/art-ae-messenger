@@ -43,7 +43,7 @@ async function disk(method,path,params={},body){
  for(const [k,v]of Object.entries(params))url.searchParams.set(k,v);
  const r=await fetch(url,{method,headers:{Authorization:'OAuth '+token,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});
  if(r.status===404)throw Object.assign(Error('Папка не найдена'),{status:404});
- if(r.status===409)throw Object.assign(Error('Папка уже существует'),{status:409});
+ if(r.status===409)throw Object.assign(Error('Объект уже существует'),{status:409});
  if(!r.ok)throw Object.assign(Error('Ошибка Яндекс Диска ('+r.status+')'),{status:502});
  if(r.status===204||r.status===201&&!r.headers.get('content-length'))return {};
  return r.json();
@@ -100,14 +100,15 @@ async function download(root,rel){
  if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
  return new Response(bytes,{status:200,headers:{'Content-Type':'application/octet-stream','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(fileName(meta.name)),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
 }
-async function upload(root,rel,name,request){
+async function upload(root,rel,name,request,overwrite=false){
  const safe=fileName(name);
  const length=Number(request.headers.get('content-length'));
  if(Number.isFinite(length)&&length>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
  const bytes=await request.arrayBuffer();
  if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
  const target=apiPath(root,rel?rel+'/'+safe:safe);
- const link=await disk('GET','/resources/upload',{path:target,overwrite:'false'});
+ let link;try{link=await disk('GET','/resources/upload',{path:target,overwrite:overwrite?'true':'false'})}
+ catch(error){if(error.status===409)throw Object.assign(Error('Файл с таким именем уже существует'),{status:409});throw error}
  const r=await transferFetch(link.href,{method:link.method==='POST'?'POST':'PUT',body:bytes,headers:{'Content-Type':'application/octet-stream'}});
  if(r.status===409||r.status===412)throw Object.assign(Error('Файл с таким именем уже существует'),{status:409});
  if(!r.ok)throw Object.assign(Error('Не удалось загрузить файл'),{status:502});
@@ -135,7 +136,7 @@ export default async function handler(request){
   const session=await getSession(request);if(!session)return response({error:'Требуется вход'},401);
   const url=new URL(request.url);let args={};
   if(request.method==='POST'&&url.searchParams.get('action')==='upload'&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
-   args={action:'upload',project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name')};
+   args={action:'upload',project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1'};
   }else if(request.method==='POST'){
    if(!request.headers.get('content-type')?.startsWith('application/json'))return response({error:'Недопустимый формат запроса'},415);
    try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}
@@ -147,10 +148,11 @@ export default async function handler(request){
    return response({project:{id:p.id,name:p.name},path:rel,...result});
   }
   if(args.action==='download'&&request.method==='GET')return await download(p.folder_path,rel);
-  if(args.action==='upload'&&request.method==='POST')return await upload(p.folder_path,rel,args.name,request);
+  if(args.action==='upload'&&request.method==='POST')return await upload(p.folder_path,rel,args.name,request,args.overwrite===true);
   if(args.action==='mkdir'&&request.method==='POST'){
    const name=folderName(args.name);
-   await disk('PUT','/resources',{path:apiPath(p.folder_path,rel?rel+'/'+name:name)});
+   try{await disk('PUT','/resources',{path:apiPath(p.folder_path,rel?rel+'/'+name:name)})}
+   catch(error){if(error.status===409)throw Object.assign(Error('Папка уже существует'),{status:409});throw error}
    return response({ok:true,path:rel?rel+'/'+name:name});
   }
   return response({error:'Неизвестное действие'},404);

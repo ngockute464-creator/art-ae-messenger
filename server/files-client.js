@@ -64,32 +64,47 @@ function explorerUploadUpdate(){
  const msg=pane.querySelector('.explorerUploadLabel');
  if(msg)msg.textContent=explorerUploading.processing?'Сохраняем файл…':('Загрузка файла: '+percent+'%');
 }
+function explorerSendUpload(file,id,path,overwrite){
+ return new Promise((resolve,reject)=>{
+  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'upload',project:id,path,name:file.name,overwrite:overwrite?'1':'0'});
+  const xhr=new XMLHttpRequest();xhr.open('POST',url,true);
+  xhr.withCredentials=true;xhr.setRequestHeader('Content-Type','application/octet-stream');
+  xhr.upload.onprogress=event=>{
+   if(!event.lengthComputable||!explorerUploading)return;
+   explorerUploading.percent=Math.min(100,Math.round(100*event.loaded/event.total));
+   explorerUploadUpdate();
+  };
+  xhr.upload.onload=()=>{if(explorerUploading){explorerUploading.processing=true;explorerUploading.percent=100;explorerUploadUpdate()}};
+  xhr.onerror=()=>reject(Object.assign(Error('Ошибка соединения при загрузке файла'),{status:0}));
+  xhr.onabort=()=>reject(Object.assign(Error('Загрузка отменена'),{status:0}));
+  xhr.ontimeout=()=>reject(Object.assign(Error('Превышено время ожидания'),{status:0}));
+  xhr.onload=()=>{
+   let payload={};try{payload=JSON.parse(xhr.responseText)}catch{}
+   if(xhr.status<200||xhr.status>=300)reject(Object.assign(Error(payload.error||'Не удалось загрузить файл (HTTP '+xhr.status+')'),{status:xhr.status}));
+   else resolve(payload);
+  };
+  xhr.send(file);
+ });
+}
 async function explorerUpload(file){
  if(!file||explorerUploading)return;
- if(file.size>explorerLimit)return alert('Максимальный размер файла — 3 МБ');
+ if(file.size>explorerLimit){alert('Максимальный размер файла — 3 МБ');return}
  const id=project,path=explorer.path;
+ const existing=explorer.project===id&&explorer.path===path&&explorer.items.some(x=>x.type==='file'&&x.name===file.name);
+ let overwrite=existing;
+ if(existing&&!confirm('Файл «'+file.name+'» уже существует. Заменить его?'))return;
  explorerUploading={project:id,path,percent:0,processing:false};
  if(view==='files'||railFileVisible())render();
+ explorerUploadUpdate();
  try{
-  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'upload',project:id,path,name:file.name});
-  await new Promise((resolve,reject)=>{
-   const xhr=new XMLHttpRequest();xhr.open('POST',url);
-   xhr.withCredentials=true;xhr.setRequestHeader('Content-Type','application/octet-stream');
-   xhr.upload.onprogress=event=>{
-    if(!event.lengthComputable||!explorerUploading)return;
-    explorerUploading.percent=Math.min(100,Math.round(event.loaded/event.total*100));explorerUploadUpdate();
-   };
-   xhr.upload.onload=()=>{if(explorerUploading){explorerUploading.processing=true;explorerUploading.percent=100;explorerUploadUpdate()}};
-   xhr.onerror=()=>reject(Error('Ошибка соединения при загрузке файла'));
-   xhr.onabort=()=>reject(Error('Загрузка отменена'));
-   xhr.onload=()=>{
-    let payload={};try{payload=JSON.parse(xhr.responseText)}catch{}
-    if(xhr.status<200||xhr.status>=300)reject(Error(payload.error||'Не удалось загрузить файл (HTTP '+xhr.status+')'));
-    else resolve(payload);
-   };
-   xhr.send(file);
-  });
-  // Refresh desktop rail as well as the mobile full-screen explorer.
+  try{await explorerSendUpload(file,id,path,overwrite)}
+  catch(error){
+   if(error.status!==409||overwrite)throw error;
+   if(!confirm('Файл «'+file.name+'» уже существует. Заменить его?'))return;
+   overwrite=true;
+   if(explorerUploading){explorerUploading.percent=0;explorerUploading.processing=false;explorerUploadUpdate()}
+   await explorerSendUpload(file,id,path,true);
+  }
   if(id===project&&(view==='files'||railFileVisible())&&explorer.path===path)await explorerLoad(path);
  }catch(error){alert(error.message||'Не удалось загрузить файл')}
  finally{explorerUploading=null;if(view==='files'||railFileVisible())render()}
@@ -236,9 +251,12 @@ async function explorerPreview(path,name,mime){
  }catch(e){if(dialog.open)body.textContent=e.message||'Не удалось показать файл'}
 }
 
-root.addEventListener('change',e=>{
- if(e.target.id==='explorerUpload'){const file=e.target.files?.[0];e.target.value='';explorerUpload(file)}
-});
+document.addEventListener('change',e=>{
+ if(e.target?.id==='explorerUpload'&&root.contains(e.target)){
+  const file=e.target.files?.[0];e.target.value='';
+  if(file)void explorerUpload(file);
+ }
+},true);
 
 function filesView(){
  if(explorer.project!==project)return '<section class="pane"><p class="help">Загрузка…</p></section>';
