@@ -26,7 +26,7 @@ async function diskMove(from,to){
  const url=new URL(API+'/resources/move');
  url.search=new URLSearchParams({from,path:to,overwrite:'false',force_async:'false'}).toString();
  const r=await fetch(url,{method:'POST',headers:authHeaders(),signal:AbortSignal.timeout(18000)});
- if(r.status===409)return (()=>{throw err('Папка с таким именем уже существует на Яндекс Диске',409)})();
+ if(r.status===409)throw err('Папка с таким именем уже существует на Яндекс Диске',409);
  if(r.status===404)throw err('Исходная папка проекта не найдена на Яндекс Диске',409);
  if(r.status!==201&&r.status!==202)throw err('Яндекс Диск отказал в переименовании папки: '+r.status,502);
  if(r.status===201)return;
