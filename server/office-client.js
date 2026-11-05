@@ -61,6 +61,9 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  top.append(title,state,hint,closeButton);
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
  const warm=kind==='quire'?warmDocx:null;
+ const warmInfo=kind==='quire'?(warm?(warm.ready?'готов до клика':'запущен, но не готов'):'не запускался'):'не предусмотрен';
+ const warmAge=warm?Math.round(performance.now()-warm.started):0;
+ console.info('[ART-AE Office] warmup at click:',{kind,warmInfo,warmAgeMs:warmAge});
  if(warm){
   window.removeEventListener('message',warm.listener);
   warmDocx=null;
@@ -78,15 +81,16 @@ async function openProjectDocument(path,name,projectId,localFile=null){
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready};active=ctx;
+ const ctx={overlay,frame,kind,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge};active=ctx;
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
   const msg=event.data;if(!msg||typeof msg.type!=='string')return;
   if(msg.type==='artae-office-ready'){
    ctx.ready=true;ctx.readyAt=performance.now();
+   console.info('[ART-AE Office] iframe ready after click',Math.round(ctx.readyAt-ctx.started),'ms');
    send();
-  }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с';console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
+  }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
   else if(msg.type==='artae-office-error')state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
  };
  window.addEventListener('message',ctx.message);
