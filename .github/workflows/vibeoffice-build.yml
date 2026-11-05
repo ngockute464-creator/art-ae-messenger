@@ -1,0 +1,39 @@
+name: VibeOffice self-hosted static bundle (experiment)
+on:
+  push:
+    branches: [netlify-preview]
+    paths:
+      - '.github/workflows/vibeoffice-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch pinned VibeOffice sources
+        uses: actions/checkout@v4
+        with:
+          repository: tcchen2026/VibeOffice
+          ref: 2ee1000584945e69ee872cbd21ab2f8bd7a80d8d
+          path: vibeoffice
+          persist-credentials: false
+      - name: Verify standalone static site and license
+        run: |
+          test -f vibeoffice/public/index.html
+          test -f vibeoffice/public/quire/index.html
+          test -f vibeoffice/public/ledger/index.html
+          test -f vibeoffice/LICENSE
+          echo "Static size:"
+          du -sh vibeoffice/public
+          find vibeoffice/public -type f | wc -l
+      - name: Package standalone editor (no documents)
+        uses: actions/upload-artifact@v4
+        with:
+          name: artae-vibeoffice-2ee1000
+          path: vibeoffice/public/
+          retention-days: 7
+          if-no-files-found: error

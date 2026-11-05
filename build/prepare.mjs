@@ -93,6 +93,7 @@ const sw='public/sw.js';
 let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-file-mentions-v10');
 writeFileSync(sw,worker);
 await import('../server/files-patch.mjs');
+await import('../server/pwa-patch.mjs');
 // Reject stale or invalid generated client before publishing.
 const finalClient=readFileSync('public/app.js','utf8');
 new Function(finalClient);
