@@ -66,8 +66,24 @@ function fileName(x){
 }
 function transferUrl(href){
  let u;try{u=new URL(href)}catch{}
- if(!u||u.protocol!=='https:'||!/(^|\.)yandex\.(ru|net)$/.test(u.hostname)||u.username||u.password)throw Object.assign(Error('Недопустимый адрес передачи файла'),{status:502});
+ // Only Yandex Disk infrastructure: never follow private or third-party redirects.
+ if(!u||u.protocol!=='https:'||!/(^|\.)(yandex\.(ru|net)|yandexcloud\.net)$/.test(u.hostname)||u.username||u.password||u.port&&u.port!=='443')
+  throw Object.assign(Error('Недопустимый адрес передачи файла'),{status:502});
  return u;
+}
+async function transferFetch(href,options={}){
+ let current=transferUrl(href);
+ for(let hop=0;hop<6;hop++){
+  const r=await fetch(current,{...options,redirect:'manual',signal:AbortSignal.timeout(25000)});
+  if([301,302,303,307,308].includes(r.status)){
+   const location=r.headers.get('location');
+   if(!location)throw Object.assign(Error('Ссылка скачивания недействительна'),{status:502});
+   current=transferUrl(new URL(location,current).href);
+   continue;
+  }
+  return r;
+ }
+ throw Object.assign(Error('Слишком много перенаправлений при скачивании'),{status:502});
 }
 async function download(root,rel){
  if(!rel)throw Object.assign(Error('Выберите файл'),{status:400});
@@ -76,7 +92,7 @@ async function download(root,rel){
  if(meta.type!=='file')throw Object.assign(Error('Это не файл'),{status:400});
  if(!Number.isFinite(meta.size)||meta.size<0||meta.size>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
  const link=await disk('GET','/resources/download',{path});
- const r=await fetch(transferUrl(link.href),{signal:AbortSignal.timeout(25000),redirect:'error'});
+ const r=await transferFetch(link.href);
  if(!r.ok)throw Object.assign(Error('Не удалось скачать файл'),{status:502});
  const size=Number(r.headers.get('content-length'));
  if(size>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
@@ -92,7 +108,7 @@ async function upload(root,rel,name,request){
  if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
  const target=apiPath(root,rel?rel+'/'+safe:safe);
  const link=await disk('GET','/resources/upload',{path:target,overwrite:'false'});
- const r=await fetch(transferUrl(link.href),{method:link.method==='POST'?'POST':'PUT',body:bytes,headers:{'Content-Type':'application/octet-stream'},signal:AbortSignal.timeout(25000),redirect:'error'});
+ const r=await transferFetch(link.href,{method:link.method==='POST'?'POST':'PUT',body:bytes,headers:{'Content-Type':'application/octet-stream'}});
  if(r.status===409||r.status===412)throw Object.assign(Error('Файл с таким именем уже существует'),{status:409});
  if(!r.ok)throw Object.assign(Error('Не удалось загрузить файл'),{status:502});
  return response({ok:true,path:rel?rel+'/'+safe:safe});
