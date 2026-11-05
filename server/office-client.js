@@ -12,16 +12,16 @@ function close(){
  window.removeEventListener('message',a.message);
  a.overlay.remove();
 }
-async function openProjectDocument(path,name,projectId){
+async function openProjectDocument(path,name,projectId,localFile=null){
  if(active)return;
  if(!/\.(docx|xlsx)$/i.test(name))return;
- if(!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
+ if(!localFile&&!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
  const overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
  const box=document.createElement('section');box.className='artaeOfficePanel';
  box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Редактирование '+name);
  const top=document.createElement('header');top.className='artaeOfficeTop';
  const title=document.createElement('strong');title.textContent=name;
- const state=document.createElement('span');state.className='artaeOfficeState';state.textContent='Загрузка файла…';
+ const state=document.createElement('span');state.className='artaeOfficeState';state.textContent=localFile?'Читаем локальный файл…':'Загрузка файла…';
  const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent='Сохранение → скачивание копии';
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
  closeButton.addEventListener('click',()=>{if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close()});
@@ -32,32 +32,52 @@ async function openProjectDocument(path,name,projectId){
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
  frame.src='/office/'+kind+'/';
  box.append(top,frame);overlay.append(box);
- const ctx={overlay,frame,message:null,buffer:null,name,projectId,ready:false,sent:false};active=ctx;
+ const ctx={overlay,frame,message:null,buffer:null,name,projectId,ready:false,sent:false,started:performance.now(),sentAt:0};active=ctx;
+ const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
   const msg=event.data;if(!msg||typeof msg.type!=='string')return;
   if(msg.type==='artae-office-ready'){
    ctx.ready=true;
-   if(ctx.buffer&&!ctx.sent){ctx.sent=true;frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ…'}
-  }else if(msg.type==='artae-office-opened')state.textContent='Редактирование копии';
+   send();
+  }else if(msg.type==='artae-office-opened'){const parseMs=Math.round(performance.now()-ctx.sentAt);state.textContent='Готово · разбор '+parseMs+' мс';console.info('[ART-AE Office] '+name+': preparation '+Math.round(ctx.sentAt-ctx.started)+' ms, editor processing '+parseMs+' ms');}
   else if(msg.type==='artae-office-error')state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
  };
  window.addEventListener('message',ctx.message);
  document.body.append(overlay);
  try{
   // Existing session-protected files API; no credentials given to the editor.
-  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project:projectId,path});
-  const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
-  if(!response.ok){let details={};try{details=await response.json()}catch{}
-   throw Error(details.error||'Не удалось получить документ: HTTP '+response.status)}
-  const blob=await response.blob();
-  if(blob.size>3*1024*1024)throw Error('Файл превышает лимит 3 МБ');
+  let blob=localFile;
+  if(!blob){
+   const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project:projectId,path});
+   const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+   if(!response.ok){let details={};try{details=await response.json()}catch{}
+    throw Error(details.error||'Не удалось получить документ: HTTP '+response.status)}
+   blob=await response.blob();
+  }
+  if(blob.size>3*1024*1024)throw Error('Файл превышает лимит теста 3 МБ');
   if(active!==ctx)return;
   ctx.buffer=await blob.arrayBuffer();
-  if(ctx.ready&&!ctx.sent){ctx.sent=true;frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ…'}
+  send();
  }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
 }
 document.addEventListener('click',event=>{
+ const local=event.target.closest('[data-act="officeLocalFile"]');
+ if(local){
+  event.preventDefault();event.stopImmediatePropagation();
+  const input=document.createElement('input');
+  input.type='file';input.accept='.docx,.xlsx';input.hidden=true;
+  document.body.append(input);
+  input.addEventListener('change',()=>{
+   const file=input.files?.[0];input.remove();
+   if(!file)return;
+   if(!/\.(docx|xlsx)$/i.test(file.name))return alert('Выберите DOCX или XLSX');
+   if(file.size>3*1024*1024)return alert('Для теста поддерживаются файлы до 3 МБ');
+   openProjectDocument('',file.name,'',file).catch(e=>alert('Ошибка редактора: '+String(e?.message||e)));
+  },{once:true});
+  input.click();
+  return;
+ }
  const button=event.target.closest('[data-act="officeEdit"]');if(!button)return;
  event.preventDefault();event.stopImmediatePropagation();
  openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||'')
