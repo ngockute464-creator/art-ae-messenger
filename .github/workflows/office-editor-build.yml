@@ -1,0 +1,67 @@
+name: Office editor standalone build (experiment)
+on:
+  push:
+    branches: [netlify-preview]
+    paths:
+      - '.github/workflows/office-editor-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out pinned upstream editor
+        uses: actions/checkout@v4
+        with:
+          repository: ranuts/document
+          ref: 07f26233e2cc2c1080f540b8393c23127cba6638
+          path: editor-source
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.4.0
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: editor-source/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: editor-source
+        run: pnpm install --frozen-lockfile
+
+      - name: Build editor
+        working-directory: editor-source
+        run: pnpm build
+
+      - name: Verify deliverable, license and embed entry
+        working-directory: editor-source
+        run: |
+          test -f dist/editor.html
+          test -d dist/sdkjs
+          test -d dist/web-apps
+          test -f dist/LICENSE
+          test -f dist/NOTICE
+          echo "Editor build size:"
+          du -sh dist
+          echo "Number of files:"
+          find dist -type f | wc -l
+          echo "Largest files:"
+          find dist -type f -printf '%s %p\n' | sort -nr | head -n 15
+
+      - name: Archive editor build for isolated self-hosting
+        uses: actions/upload-artifact@v4
+        with:
+          name: artae-office-editor-07f2623
+          path: editor-source/dist/
+          retention-days: 7
+          compression-level: 6
+          if-no-files-found: error
