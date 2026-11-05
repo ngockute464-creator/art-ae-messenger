@@ -2,6 +2,7 @@
 // Existing accounts and sessions continue to be checked by auth.mjs.
 import {randomUUID} from 'node:crypto';
 import {getSession} from './auth.mjs';
+import {renameProjectFolder,folderForName} from './project-rename.mjs';
 const tables={project:'artae_projects',convo:'artae_conversations',message:'artae_messages'};
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(x,status=200)=>Response.json(x,{status,headers});
@@ -69,12 +70,16 @@ export default async function handler(req){
    return reply({project:projectView(rows[0])});
   }
   if(action==='updateProject'&&req.method==='POST'){
-   if(!await activeProject(body.id))return reply({error:'Проект не найден'},404);
+   const current=await activeProject(body.id);if(!current)return reply({error:'Проект не найден'},404);
    const name=clean(body.name,100);if(!name)return reply({error:'Введите имя проекта'},400);
-   const patch={name,updated_at:time()};
-   if(body.avatar!==undefined){if(!avatarOk(body.avatar))return reply({error:'Недопустимый аватар'},400);patch.avatar=body.avatar}
-   const rows=await db('project',{id:'eq.'+body.id,deleted_at:'is.null'},{method:'PATCH',body:patch});
-   return reply({project:projectView(rows[0])});
+   if(body.avatar!==undefined&&!avatarOk(body.avatar))return reply({error:'Недопустимый аватар'},400);
+   if(name!==current.name){
+    const projects=await db('project',{deleted_at:'is.null',select:'id,name,folder_path'});
+    const targetPath=folderForName(name);
+    if(projects.some(p=>p.id!==current.id&&(p.name.toLocaleLowerCase('ru')===name.toLocaleLowerCase('ru')||p.folder_path.toLocaleLowerCase('ru')===targetPath.toLocaleLowerCase('ru'))))return reply({error:'Проект или папка с таким именем уже существует'},409);
+   }
+   const updated=await renameProjectFolder({oldProject:current,name,db,avatarProvided:body.avatar!==undefined,avatar:body.avatar});
+   return reply({project:projectView(updated)});
   }
   if(action==='createConvo'&&req.method==='POST'){
    if(!await activeProject(body.project))return reply({error:'Проект не найден'},404);
