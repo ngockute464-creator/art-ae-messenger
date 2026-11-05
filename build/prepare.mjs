@@ -5,6 +5,8 @@ copyFileSync('server/realtime-token.mjs','netlify/functions/realtime-token.mjs')
 copyFileSync('server/jwt-standby-probe.mjs','netlify/functions/jwt-standby-probe.mjs');
 copyFileSync('netlify/functions/auth.mjs','netlify/functions/auth-disk.mjs');
 copyFileSync('server/auth-migrate.mjs','netlify/functions/auth-migrate.mjs');
+copyFileSync('server/auth-pg.mjs','netlify/functions/auth-pg.mjs');
+copyFileSync('server/auth-compare.mjs','netlify/functions/auth-compare.mjs');
 const file='public/app.js';
 let app=readFileSync(file,'utf8');
 function replaceOnce(before,after,label){
