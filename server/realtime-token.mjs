@@ -1,12 +1,16 @@
 // Scoped JWT for private realtime channels. Uses the existing ART-AE session.
-import {createHmac} from 'node:crypto';
+import {createPrivateKey,sign} from 'node:crypto';
 import {getSession} from './auth.mjs';
 const UUID=/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 const reply=(payload,status=200)=>Response.json(payload,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 const base64url=part=>Buffer.from(JSON.stringify(part)).toString('base64url');
-function signedJwt(payload,secret){
- const s=base64url({alg:'HS256',typ:'JWT'})+'.'+base64url(payload);
- return s+'.'+createHmac('sha256',secret).update(s).digest('base64url');
+function signedJwt(payload,jwkJson){
+ const jwk=JSON.parse(jwkJson);
+ if(jwk.kty!=='EC'||jwk.crv!=='P-256'||!jwk.d||!jwk.kid)throw Error('Invalid ES256 signing JWK');
+ const privateKey=createPrivateKey({key:jwk,format:'jwk'});
+ const input=base64url({alg:'ES256',typ:'JWT',kid:jwk.kid})+'.'+base64url(payload);
+ const signature=sign('sha256',Buffer.from(input),{key:privateKey,dsaEncoding:'ieee-p1363'});
+ return input+'.'+signature.toString('base64url');
 }
 export default async function handler(req){
  if(req.method!=='GET')return reply({error:'Method not allowed'},405);
@@ -18,7 +22,7 @@ export default async function handler(req){
   const base=process.env.SUPABASE_URL?.replace(/\/+$/,'');
   const key=process.env.SUPABASE_SECRET_KEY;
   const publishable=process.env.SUPABASE_PUBLISHABLE_KEY;
-  const signingKey=process.env.SUPABASE_JWT_SECRET;
+  const signingKey=process.env.SUPABASE_SIGNING_JWK;
   if(!base||!key||!publishable||!signingKey)return reply({enabled:false,error:'Realtime not configured'},503);
   const u=new URL(base);
   if(u.protocol!=='https:'||!u.hostname.endsWith('.supabase.co')||u.pathname!=='/')return reply({error:'Invalid Supabase URL'},503);
