@@ -7,6 +7,19 @@ let railCollapsed=!!workspaceState.railCollapsed;
 let railWidth=Math.max(230,Math.min(410,Number(workspaceState.railWidth)||280));
 document.documentElement.style.setProperty('--rail-width',railWidth+'px');
 let pinsLoading=false,pinsUnavailable=false,pinsVersion='';
+let resourceReturn=null;
+function rememberResourceOrigin(){
+ if(view==='files'||view==='pins'||view==='projectpins')return;
+ resourceReturn={view:view==='chat'?'chat':'conversations',project,convo};
+}
+function returnFromResources(){
+ const target=resourceReturn;
+ resourceReturn=null;
+ if(target?.project===project&&target.view==='chat'&&target.convo&&data.convos.some(c=>c.id===target.convo&&c.project===project)){
+  convo=target.convo;switchView('chat');syncMessages(true);connectRealtime(convo);
+ }else switchView('conversations');
+}
+
 function saveWorkplace(){
  try{
   const pane=root.querySelector('.explorerPane');
@@ -92,7 +105,7 @@ function railPanel(title,icon,items,scope){
  return '<section class="railSection">'+head+(collapsed?'':'<div class="railSectionBody">'+(items||'<p class="railEmpty">Пока пусто</p>')+'</div>')+'</section>';
 }
 function desktopRail(){
- if(view!=='chat'||!project||!convo)return '';
+ if(view==='files'||!project||!convo)return '';
  const files=railProject===project?railFiles:[];
  const pinWarning=pinsUnavailable?'<p class="railEmpty" role="status">Общие закрепления пока недоступны: проверьте таблицу PostgreSQL.</p>':'';
  const fileRows=files.map(f=>'<div class="railItem"><button type="button" class="railItemName" data-act="filesPreview" data-path="'+esc(f.path)+'" data-name="'+esc(f.name)+'" data-mime="'+esc(f.mimeType||'')+'" title="Посмотреть файл">'+esc(f.name)+'</button><button type="button" class="railMini" data-act="filesDownload" data-path="'+esc(f.path)+'" data-name="'+esc(f.name)+'" aria-label="Скачать '+esc(f.name)+'">↓</button></div>').join('');

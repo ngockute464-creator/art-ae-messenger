@@ -15,6 +15,7 @@ async function explorerApi(action,params){
 }
 function openExplorer(path=''){
  if(!project)return;
+ rememberResourceOrigin();
  stopRealtime();view='files';openMenu=null;profileMenuOpen=false;
  explorerLoad(path);
  history.replaceState({view:'files'},'',location.pathname+location.search+'#files');

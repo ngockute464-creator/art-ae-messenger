@@ -21,7 +21,7 @@ replace("if(action==='project')openProject(id);",
         "if(action==='filesHome')openExplorer();else if(action==='filesReload')explorerLoad(explorer.path);else if(action==='filesOpen')explorerLoad(el.dataset.path);else if(action==='filesUp')explorerLoad(explorer.path.split('/').slice(0,-1).join('/'));else if(action==='filesMkdir')explorerMkdir();else if(action==='filesUpload')root.querySelector('#explorerUpload')?.click();else if(action==='filesDownload')explorerDownload(el.dataset.path,el.dataset.name);else if(action==='filesPreview')explorerPreview(el.dataset.path,el.dataset.name,el.dataset.mime);else if(action==='project')openProject(id);",
         'explorer actions');
 replace("else if(view==='chat')switchView('conversations');else if(view==='conversations')switchView('projects');",
-        "else if(view==='chat'||view==='files')switchView('conversations');else if(view==='conversations')switchView('projects');",
+        "else if(view==='files')returnFromResources();else if(view==='chat')switchView('conversations');else if(view==='conversations')switchView('projects');",
         'explorer back action');
 
 replace('${sidebar()}<main class="main">',
@@ -42,12 +42,12 @@ replace("async function beginSync(){try{await syncOverview();syncReady=true;","a
 replace("📌 Закреплено</button>","📌 <span class=\"pinLabel\">Закреплено</span></button>",'ux patch 4');
 replace("${backButton}${pinButton}<div class=\"profileMenuWrap\">","${backButton}${pinButton}<button type=\"button\" class=\"btn small headerNav mobileFilesTop\" data-act=\"filesHome\" title=\"Файлы проекта\" aria-label=\"Файлы проекта\">📁</button><div class=\"profileMenuWrap\">",'ux patch 5');
 replace("<div class=\"app mobile-${view}\">","<div class=\"app mobile-${view}${railCollapsed?' rail-collapsed':''}\">",'ux patch 6');
-replace("${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}","${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}${view==='chat'?desktopRail():''}",'ux patch 7');
+replace("${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}","${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}${view!=='files'?desktopRail():''}",'ux patch 7');
 replace("Закрепления пока сохраняются только на этом устройстве","Общие закрепления всех участников",'ux patch 8');
 replace("function pinCard(p){let msg=p.kind==='message'?data.messages.find(m=>m.id===p.item):data.messages.find(m=>m.id===data.files.find(f=>f.id===p.item)?.message);","function pinCard(p){let msg=p.kind==='message'?(data.messages.find(m=>m.id===p.item)||{id:p.item,convo:p.convoId,text:p.previewText,who:'',time:p.createdAt}):data.messages.find(m=>m.id===data.files.find(f=>f.id===p.item)?.message);",'ux patch 9');
 replace("let file=p.kind==='file'?data.files.find(f=>f.id===p.item):null;let actions=","let file=p.kind==='file'?(data.files.find(f=>f.id===p.item)||{name:p.item.split('/').pop()}):null;let actions=",'ux patch 10');
 replace("if(pin)pin.note=val;persist();","if(pin){await updateRemoteNote(m.id,val);pin.note=val;}",'ux patch 11');
-replace("if(action==='toggleProfileMenu'){","if(action==='railCollapse'){railCollapsed=!railCollapsed;saveWorkplace();render();return}if(action==='railSection'){workspaceState['collapsed_'+scope]=!workspaceState['collapsed_'+scope];try{localStorage.setItem(WORKSPACE_KEY,JSON.stringify(workspaceState))}catch{}render();return}if(action==='railJumpPin'){railJumpPin(id,el.dataset.convo);return}if(action==='pinFile'){toggleRemotePin('file',el.dataset.path,'project',project);return}if(action==='togglePin'){toggleRemotePin(kind,id,scope,scope==='project'?project:convo);openMenu=null;render();return}if(action==='removePin'){removeRemotePin(id);return}if(action==='goMessage'&&!data.messages.find(m=>m.id===id)){const pin=data.pins.find(p=>p.item===id);if(pin?.convoId){railJumpPin(id,pin.convoId);return}}if(action==='toggleProfileMenu'){",'ux patch 12');
+replace("if(action==='toggleProfileMenu'){","if((action==='pins'||action==='projectpins')&&view==='chat')rememberResourceOrigin();if(action==='railCollapse'){railCollapsed=!railCollapsed;saveWorkplace();render();return}if(action==='railSection'){workspaceState['collapsed_'+scope]=!workspaceState['collapsed_'+scope];try{localStorage.setItem(WORKSPACE_KEY,JSON.stringify(workspaceState))}catch{}render();return}if(action==='railJumpPin'){railJumpPin(id,el.dataset.convo);return}if(action==='pinFile'){toggleRemotePin('file',el.dataset.path,'project',project);return}if(action==='togglePin'){toggleRemotePin(kind,id,scope,scope==='project'?project:convo);openMenu=null;render();return}if(action==='removePin'){removeRemotePin(id);return}if(action==='goMessage'&&!data.messages.find(m=>m.id===id)){const pin=data.pins.find(p=>p.item===id);if(pin?.convoId){railJumpPin(id,pin.convoId);return}}if(action==='toggleProfileMenu'){",'ux patch 12');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
@@ -98,10 +98,10 @@ css+='\n'+[
 
 '@media(max-width:720px){.explorerPane{padding:14px}.explorerToolbar h2{font-size:18px}.fileEntry{padding:12px 9px}}'
 ].join('\n');
-css+='\n'+[".mobileFilesTop{display:none}",
-".explorerLink{display:block}",
-".app.mobile-chat .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr) var(--rail-width,280px)}",
-".app.mobile-chat.rail-collapsed .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr) 52px}",
+css+='\n'+[".mobileFilesTop{display:inline-flex}",
+".explorerLink{display:none}",
+".app.mobile-chat .split,.app.mobile-conversations .split,.app.mobile-pins .split,.app.mobile-projectpins .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr) var(--rail-width,280px)}",
+".app.mobile-chat.rail-collapsed .split,.app.mobile-conversations.rail-collapsed .split,.app.mobile-pins.rail-collapsed .split,.app.mobile-projectpins.rail-collapsed .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr) 52px}",
 ".desktopRail{min-width:0;overflow:auto;background:#fafcff;border-left:1px solid #e4eaf3;display:flex;flex-direction:column;gap:10px;padding:12px}",
 ".desktopRailGrip{position:absolute;right:var(--rail-width,280px);width:8px;top:0;bottom:0;z-index:7;cursor:col-resize}",
 ".rail-collapsed .desktopRailGrip{display:none}",
@@ -122,6 +122,7 @@ css+='\n'+[".mobileFilesTop{display:none}",
 ".fileEntryNameAction:hover{text-decoration:underline;color:#2363bd}",
 "button.fileActionBtn{cursor:pointer}",
 "button[data-act],.navitem,.railItemName,.railPinnedItem{cursor:pointer}",
-"@media(max-width:1180px){.desktopRail,.desktopRailGrip{display:none}.app.mobile-chat .split,.app.mobile-chat.rail-collapsed .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr)}}",
-"@media(max-width:650px){.mobileFilesTop{display:inline-flex}.pinLabel{display:none}.explorerLink{display:none}.app.mobile-chat .split,.app.mobile-chat.rail-collapsed .split{display:block}.app.mobile-chat .convos{display:none}}"].join('\n');
+".desktopRail{grid-column:3;grid-row:1;min-height:0}",
+"@media(max-width:1180px){.desktopRail,.desktopRailGrip{display:none}.app.mobile-chat .split,.app.mobile-chat.rail-collapsed .split,.app.mobile-conversations .split,.app.mobile-conversations.rail-collapsed .split,.app.mobile-pins .split,.app.mobile-pins.rail-collapsed .split,.app.mobile-projectpins .split,.app.mobile-projectpins.rail-collapsed .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr)}}",
+"@media(max-width:650px){.mobileFilesTop{display:inline-flex}.pinLabel{display:none}.explorerLink{display:none}.app.mobile-chat .split,.app.mobile-chat.rail-collapsed .split,.app.mobile-conversations .split,.app.mobile-conversations.rail-collapsed .split,.app.mobile-pins .split,.app.mobile-projectpins .split{display:block}.app.mobile-chat .convos{display:none}}"].join('\n');
 writeFileSync(cssFile,css);
