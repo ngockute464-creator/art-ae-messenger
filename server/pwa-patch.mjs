@@ -34,5 +34,11 @@ if(!sw.includes("'./pwa-client.js'")) {
  if(!sw.includes("'./icon.svg'"))throw Error('PWA: unexpected precache list');
  sw=sw.replace("'./icon.svg'","'./icon.svg','./pwa-client.js'");
 }
+// Cache the shell immediately on repeat launches. Server data and documents
+// continue to bypass the service worker's cache as before.
+const networkFirst="e.respondWith(fetch(e.request).then(r=>{if(r.ok){let clone=r.clone();caches.open(CACHE).then(c=>c.put(e.request,clone))}return r}).catch(()=>caches.match(e.request)))";
+const offlineFirst="if(['/','/index.html','/styles.css','/app.js','/auth.js','/auth.css','/manifest.webmanifest','/icon.svg','/pwa-client.js'].includes(path)){e.respondWith(caches.match(e.request).then(hit=>hit||fetch(e.request)));return}"+networkFirst;
+if(!sw.includes(networkFirst))throw Error('PWA: existing fetch strategy changed');
+sw=sw.replace(networkFirst,offlineFirst);
 writeFileSync(swPath,sw);
 console.log('ART-AE: installable PWA shell, profile status and versioned offline resources');

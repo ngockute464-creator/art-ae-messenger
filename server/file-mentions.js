@@ -130,7 +130,7 @@ function openFileMentionPicker(input,at){
  dialog.showModal();showFileMentionFolder('');
 }
 root.addEventListener('input',event=>{
- if(event.target?.id!=='draft'||event.isComposing)return;
+ if(!['draft','editText'].includes(event.target?.id)||event.isComposing)return;
  if(event.inputType!=='insertText'||event.data!=='@')return;
  const input=event.target,at=input.selectionStart-1;
  if(at<0||input.value[at]!=='@')return;
