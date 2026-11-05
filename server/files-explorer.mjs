@@ -115,6 +115,20 @@ async function upload(root,rel,name,request,overwrite=false){
  return response({ok:true,path:rel?rel+'/'+safe:safe});
 }
 
+async function removeFile(root,rel){
+ if(!rel)throw Object.assign(Error('Выберите файл'),{status:400});
+ const path=apiPath(root,rel);
+ const meta=await disk('GET','/resources',{path,fields:'name,type'});
+ if(meta.type!=='file')throw Object.assign(Error('Удалять можно только файлы'),{status:400});
+ const {token}=authEnv();
+ const u=new URL(YD+'/resources');
+ u.searchParams.set('path',path);
+ u.searchParams.set('permanently','false');
+ const res=await fetch(u,{method:'DELETE',headers:{Authorization:'OAuth '+token},signal:AbortSignal.timeout(15000)});
+ if(res.status===404)throw Object.assign(Error('Файл уже удалён'),{status:404});
+ if(![202,204].includes(res.status))throw Object.assign(Error('Не удалось удалить файл с Яндекс Диска'),{status:502});
+ return response({ok:true,path:rel});
+}
 async function list(root,rel){
  const path=apiPath(root,rel);
  let offset=0;const items=[];let total=0;
@@ -149,6 +163,7 @@ export default async function handler(request){
   }
   if(args.action==='download'&&request.method==='GET')return await download(p.folder_path,rel);
   if(args.action==='upload'&&request.method==='POST')return await upload(p.folder_path,rel,args.name,request,args.overwrite===true);
+   if(args.action==='delete'&&request.method==='POST')return await removeFile(p.folder_path,rel);
   if(args.action==='mkdir'&&request.method==='POST'){
    const name=folderName(args.name);
    try{await disk('PUT','/resources',{path:apiPath(p.folder_path,rel?rel+'/'+name:name)})}

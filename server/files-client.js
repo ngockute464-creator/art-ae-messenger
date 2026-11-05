@@ -2,6 +2,8 @@
 let explorer={project:null,path:'',items:[],loading:false,error:'',hasMore:false};
 let explorerRequest=0;
 let explorerUploading=null;
+let explorerDeleting=false;
+let explorerPolling=false;
 const explorerLimit=3*1024*1024;
 async function explorerApi(action,params){
  const api='/.netlify/functions/files-explorer';
@@ -45,6 +47,49 @@ async function explorerLoad(path=''){
   setTimeout(()=>{try{window.ARTAE_OFFICE_PREWARM?.()}catch(error){console.warn('DOCX warm-up:',error)}},750);
   setTimeout(()=>{try{window.ARTAE_OFFICE_PREWARM_XLSX?.()}catch(error){console.warn('XLSX warm-up:',error)}},2500);
  }
+}
+// Silent polling while the explorer is visible; never interrupts uploads or documents.
+async function explorerCheckChanges(){
+ if(explorerPolling||explorerUploading||explorerDeleting||document.hidden||!project||
+   explorer.loading||explorer.error||explorer.project!==project||
+   !(view==='files'||railFileVisible())||
+   document.querySelector('dialog[open],.artaeOfficeOverlay'))return;
+ const id=project,path=explorer.path,seq=explorerRequest;
+ explorerPolling=true;
+ try{
+  const result=await explorerApi('list',{project:id,path});
+  if(seq!==explorerRequest||id!==project||path!==explorer.path||
+     explorerUploading||explorerDeleting||document.hidden||
+     !(view==='files'||railFileVisible()))return;
+  const items=result.items||[];
+  const signature=xs=>JSON.stringify(xs.map(x=>[x.path,x.type,x.size,x.modified]));
+  if(signature(items)!==signature(explorer.items)||!!result.hasMore!==explorer.hasMore){
+   explorer={...explorer,items,hasMore:!!result.hasMore};
+   const old=root.querySelector('.explorerPane');
+   const scroll=old?.scrollTop||0;
+   render();
+   const pane=root.querySelector('.explorerPane');
+   if(pane)pane.scrollTop=scroll;
+  }
+ }catch(error){console.warn('File auto-refresh:',error)}
+ finally{explorerPolling=false}
+}
+setInterval(()=>{void explorerCheckChanges()},20000);
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden)void explorerCheckChanges();
+});
+window.addEventListener('focus',()=>{void explorerCheckChanges()});
+
+async function explorerDelete(path,name){
+ if(!path||!name||explorerDeleting||explorerUploading)return;
+ if(!confirm('Удалить файл «'+name+'»?'))return;
+ const id=project,folder=explorer.path;
+ explorerDeleting=true;
+ try{
+  await explorerApi('delete',{project:id,path});
+  if(id===project&&folder===explorer.path&&(view==='files'||railFileVisible()))await explorerLoad(folder);
+ }catch(error){alert(error.message||'Не удалось удалить файл')}
+ finally{explorerDeleting=false}
 }
 async function explorerMkdir(){
  const name=prompt('Название новой папки');
@@ -268,7 +313,7 @@ function filesView(){
   if(isFolder)return '<button type="button" class="fileEntry" data-act="filesOpen" data-path="'+esc(item.path)+'"><span class="fileGlyph" aria-hidden="true">📁</span><span class="fileEntryName">'+esc(item.name)+'</span><span class="fileEntryMeta">'+esc(size)+'</span><span aria-hidden="true">›</span></button>';
   const canOffice=/\.(docx|xlsx)$/i.test(item.name);
    const editAction=canOffice?'<button type="button" class="fileActionBtn" data-act="officeEdit" data-project="'+esc(String(explorer.project))+'" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Редактировать копию в VibeOffice" aria-label="Редактировать '+esc(item.name)+'">✎</button>':'';
-   return '<div class="fileEntry"><span class="fileActionButtons">'+editAction+'<button type="button" class="fileActionBtn" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'" title="Посмотреть" aria-label="Посмотреть '+esc(item.name)+'">🔍</button><button type="button" class="fileActionBtn" data-act="filesDownload" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Скачать" aria-label="Скачать '+esc(item.name)+'">↓</button></span><button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'">'+esc(item.name)+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn" data-act="pinFile" data-path="'+esc(item.path)+'" title="Закрепить в проекте" aria-label="Закрепить '+esc(item.name)+'">📌</button></div>';
+   return '<div class="fileEntry"><span class="fileActionButtons">'+editAction+'<button type="button" class="fileActionBtn" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'" title="Посмотреть" aria-label="Посмотреть '+esc(item.name)+'">🔍</button><button type="button" class="fileActionBtn" data-act="filesDownload" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Скачать" aria-label="Скачать '+esc(item.name)+'">↓</button><button type="button" class="fileActionBtn" data-act="filesDelete" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Удалить файл" aria-label="Удалить '+esc(item.name)+'">🗑</button></span><button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'">'+esc(item.name)+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn" data-act="pinFile" data-path="'+esc(item.path)+'" title="Закрепить в проекте" aria-label="Закрепить '+esc(item.name)+'">📌</button></div>';
 
  }).join('');
  const upload=explorerUploading&&explorerUploading.project===explorer.project&&explorerUploading.path===explorer.path;
