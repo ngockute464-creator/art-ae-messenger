@@ -54,3 +54,37 @@ function filesView(){
  const body=explorer.loading?'<div class="empty">Загрузка…</div>':explorer.error?'<div class="empty"><p>'+esc(explorer.error)+'</p><button class="btn" data-act="filesReload">Повторить</button></div>':list||'<div class="empty"><h3>Папка пуста</h3><p>Создай подпапку, чтобы организовать файлы.</p></div>';
  return '<section class="pane explorerPane"><div class="explorerToolbar"><div><h2>Файлы проекта</h2><p class="help explorerPath">'+esc(cp()?.name||'Проект')+breadcrumbs+'</p></div><button type="button" class="btn small primary" data-act="filesMkdir"'+(explorer.loading?' disabled':'')+'>＋ Папка</button></div>'+back+'<div class="explorerList">'+body+'</div>'+(explorer.hasMore?'<p class="help">Показана часть элементов папки.</p>':'')+'</section>';
 }
+
+async function trashProject(id){
+ const p=data.projects.find(x=>x.id===id);
+ if(!p||window.ARTAE_AUTH?.getUser()?.role!=='admin')return;
+ const typed=prompt('Чтобы удалить проект «'+p.name+'» из списка у всех пользователей, введите его точное название. Переписка и файлы сохранятся для восстановления.');
+ if(typed===null)return;
+ if(typed!==p.name)return alert('Название не совпадает. Проект не удалён.');
+ if(!confirm('Скрыть проект «'+p.name+'» и все его разговоры? Восстановление доступно администратору.'))return;
+ try{
+  await syncApi('deleteProject',{id,confirmName:typed});
+  modal=null;data.projects=data.projects.filter(x=>x.id!==id);
+  const ids=new Set(data.convos.filter(c=>c.project===id).map(c=>c.id));
+  data.convos=data.convos.filter(c=>c.project!==id);
+  data.messages=data.messages.filter(m=>!ids.has(m.convo));
+  if(project===id){project=data.projects[0]?.id||null;convo=null;view=project?'conversations':'projects';stopRealtime();}
+  render();await syncOverview();
+ }catch(e){alert(e.message||'Не удалось удалить проект')}
+}
+async function restoreProjectPicker(){
+ if(window.ARTAE_AUTH?.getUser()?.role!=='admin')return;
+ try{
+  const r=await fetch('/.netlify/functions/sync?action=deletedProjects',{credentials:'same-origin',cache:'no-store'});
+  const value=await r.json();if(!r.ok)throw Error(value.error||'Ошибка запроса');
+  const projects=value.projects||[];
+  if(!projects.length)return alert('Удалённых проектов нет.');
+  const choice=prompt('Восстановить проект. Введите номер из списка:\n'+projects.map((p,i)=>(i+1)+'. '+p.name).join('\n'));
+  if(choice===null)return;
+  if(!/^[1-9][0-9]*$/.test(choice)||Number(choice)>projects.length)return alert('Неверный номер.');
+  const p=projects[Number(choice)-1];
+  if(!confirm('Восстановить «'+p.name+'» вместе с разговорами?'))return;
+  await syncApi('restoreProject',{id:p.id});
+  await syncOverview();render();
+ }catch(e){alert(e.message||'Не удалось восстановить проект')}
+}
