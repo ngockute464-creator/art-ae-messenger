@@ -65,6 +65,12 @@ css+='\n'+[
 'img.filePreviewMedia{height:auto;max-height:72vh;margin:auto}',
 'audio.filePreviewMedia{height:64px}',
 '.filePreviewText{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:13px/1.5 ui-monospace,monospace}',
+'.filePreviewNotice{font-size:12px;opacity:.75;margin:0 0 12px}',
+'.fileImageViewport{height:min(72vh,720px);min-height:220px;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;background:rgba(120,140,160,.07);border-radius:8px}',
+'.fileImageViewport img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;user-select:none;transform-origin:center center}',
+'.fileZoomTools{display:flex;gap:4px;margin-left:auto;margin-right:12px}',
+'.fileZoomTools button{min-width:36px}',
+'.filePreviewMedia[type="application/pdf"]{height:min(74vh,740px);min-height:320px}',
 
 '.workspace{position:relative;grid-template-columns:var(--project-col-width,290px) minmax(0,1fr)}',
 '.split{position:relative;grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr)}',
