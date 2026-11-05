@@ -91,13 +91,14 @@ async function refreshRailFiles(){
   const result=await explorerApi('list',{project:id,path:''});
   if(id!==project)return;
   railFiles=(result.items||[]).filter(x=>x.type==='file').sort((a,b)=>String(b.modified||'').localeCompare(String(a.modified||''))).slice(0,7);
-  if(view==='chat'&&!modal&&!editing&&document.activeElement?.id!=='draft')render();
+  if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
  }catch(e){console.warn('Project files summary:',e.message);railFiles=[]}
  finally{railLoading=false}
 }
 function railPins(scope){
  const id=scope==='project'?project:convo;
- return data.pins.filter(p=>p.scope===scope&&p.scopeId===id).slice(0,7);
+ if(scope==='convo'&&(!id||!data.convos.some(c=>c.id===id&&c.project===project)))return [];
+ return data.pins.filter(p=>p.project===project&&p.scope===scope&&p.scopeId===id).slice(0,7);
 }
 function railPanel(title,icon,items,scope){
  const collapsed=!!workspaceState['collapsed_'+scope];
@@ -105,7 +106,7 @@ function railPanel(title,icon,items,scope){
  return '<section class="railSection">'+head+(collapsed?'':'<div class="railSectionBody">'+(items||'<p class="railEmpty">Пока пусто</p>')+'</div>')+'</section>';
 }
 function desktopRail(){
- if(view==='files'||!project||!convo)return '';
+ if(view==='files'||!project)return '';
  const files=railProject===project?railFiles:[];
  const pinWarning=pinsUnavailable?'<p class="railEmpty" role="status">Общие закрепления пока недоступны: проверьте таблицу PostgreSQL.</p>':'';
  const fileRows=files.map(f=>'<div class="railItem"><button type="button" class="railItemName" data-act="filesPreview" data-path="'+esc(f.path)+'" data-name="'+esc(f.name)+'" data-mime="'+esc(f.mimeType||'')+'" title="Посмотреть файл">'+esc(f.name)+'</button><button type="button" class="railMini" data-act="filesDownload" data-path="'+esc(f.path)+'" data-name="'+esc(f.name)+'" aria-label="Скачать '+esc(f.name)+'">↓</button></div>').join('');
@@ -117,7 +118,7 @@ function desktopRail(){
  return '<div class="desktopRailGrip" data-act="railResize" role="separator" aria-label="Изменить ширину правой панели"></div><aside class="desktopRail"><div class="railTop"><strong>Материалы</strong><button class="railMini" type="button" data-act="railCollapse" title="Свернуть правую панель">☷</button></div>'+
  (railCollapsed?'':pinWarning+railPanel('Файлы проекта','📁',fileRows+'<button type="button" class="railAll" data-act="filesHome">Все файлы</button>','files')+
  railPanel('Закрепления проекта','📌',cards('project')+'<button type="button" class="railAll" data-act="pins" data-scope="project">Все закрепления</button>','project')+
- railPanel('Закрепления разговора','📌',cards('convo')+'<button type="button" class="railAll" data-act="pins" data-scope="convo">Все закрепления</button>','convo'))+
+ railPanel('Закрепления разговора','📌',convo&&data.convos.some(c=>c.id===convo&&c.project===project)?cards('convo')+'<button type="button" class="railAll" data-act="pins" data-scope="convo">Все закрепления</button>':'<p class="railEmpty">Выберите разговор</p>','convo'))+
  '</aside>';
 }
 async function railJumpPin(item,targetConvo){
@@ -131,8 +132,10 @@ root.addEventListener('scroll',e=>{
  if(e.target?.classList?.contains('explorerPane'))saveWorkplace();
 },true);
 window.addEventListener('pagehide',saveWorkplace);
+let lastRailProject=null;
 root.addEventListener('click',()=>queueMicrotask(()=>{
  saveWorkplace();
+ if(project!==lastRailProject){lastRailProject=project;railProject=null;railFiles=[];pinsVersion='';data.pins=[];refreshPins();}
  if(project&&railProject!==project)refreshRailFiles();
 }));
 root.addEventListener('pointerdown',e=>{
