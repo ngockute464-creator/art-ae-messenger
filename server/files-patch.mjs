@@ -10,7 +10,8 @@ const client=readFileSync('server/files-client.js','utf8');
 const resizeClient=readFileSync('server/layout-resize.js','utf8');
 const uxClient=readFileSync('server/ux-client.js','utf8');
 const mentionsClient=readFileSync('server/file-mentions.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\nfunction cp(){','client and resize functions');
+const officeClient=readFileSync('server/office-client.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\nfunction cp(){','client and resize functions');
 replace('return '+b+'<aside class="convos">${convos().map',
         'return '+b+'<aside class="convos"><button class="add explorerLink" type="button" data-act="filesHome">📁 Файлы проекта</button>${convos().map',
         'project file navigation');

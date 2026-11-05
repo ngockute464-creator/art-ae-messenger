@@ -16,7 +16,7 @@ async function openProjectDocument(path,name){
  if(active)return;
  if(!/\.(docx|xlsx)$/i.test(name))return;
  const projectId=typeof project==='string'?project:null;
- if(!projectId)return;
+ if(!projectId){alert('Сначала выберите проект, затем откройте документ.');return;}
  const overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
  const box=document.createElement('section');box.className='artaeOfficePanel';
  box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Редактирование '+name);
@@ -57,7 +57,8 @@ async function openProjectDocument(path,name){
 document.addEventListener('click',event=>{
  const button=event.target.closest('[data-act="officeEdit"]');if(!button)return;
  event.preventDefault();event.stopImmediatePropagation();
- openProjectDocument(button.dataset.path||'',button.dataset.name||'');
+ openProjectDocument(button.dataset.path||'',button.dataset.name||'')
+  .catch(error=>alert('Не удалось открыть редактор: '+String(error?.message||error)));
 },true);
 const css=document.createElement('style');css.textContent=`
 .artaeOfficeOverlay{position:fixed;inset:0;z-index:100001;background:var(--surface,#fff);display:flex}
