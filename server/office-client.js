@@ -60,6 +60,7 @@ window.ARTAE_OFFICE_PREWARM=prewarmOfficeDocx;
 function close(){
  const a=active;if(!a)return;active=null;
  window.removeEventListener('message',a.message);
+ if(a.pdfUrl){URL.revokeObjectURL(a.pdfUrl);a.pdfUrl=null}
  a.overlay.remove();
  if(a.kind==='ledger')setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},800);
 }
@@ -67,7 +68,10 @@ function finishDocxClose(ctx){
  if(active!==ctx)return;
  active=null;
  window.removeEventListener('message',ctx.message);
+ if(ctx.pdfUrl){URL.revokeObjectURL(ctx.pdfUrl);ctx.pdfUrl=null}
  const host=ctx.overlay;
+ host.querySelectorAll('.artaePdfViewer,.artaePdfFallback').forEach(el=>el.remove());
+ ctx.frame.style.display='';
  // The iframe never leaves its DOM parent; closing Quire resets to a fresh
  // blank document before we hide it. Keep the ready engine for the next DOCX.
  const header=host.querySelector('.artaeOfficeTop');
@@ -84,17 +88,17 @@ function finishDocxClose(ctx){
  console.info('[ART-AE Office] DOCX reset completed; ready instance retained');
  if(!warmXlsx)setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},1000);
 }
-async function openProjectDocument(path,name,projectId,localFile=null){
+async function openProjectDocument(path,name,projectId,localFile=null,mode='edit'){
  if(active)return;
  if(!/\.(docx|xlsx)$/i.test(name))return;
  if(!localFile&&!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
  let overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
  const box=document.createElement('section');box.className='artaeOfficePanel';
- box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Редактирование '+name);
+ box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label',(mode==='preview'?'Просмотр ':'Редактирование ')+name);
  const top=document.createElement('header');top.className='artaeOfficeTop';
  const title=document.createElement('strong');title.textContent=name;
  const state=document.createElement('span');state.className='artaeOfficeState';state.textContent=localFile?'Читаем локальный файл…':'Загрузка файла…';
- const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent='Сохранение → скачивание копии';
+ const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent=mode==='preview'?'PDF-просмотр':'Сохранение → скачивание копии';
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
  closeButton.addEventListener('click',()=>{
   if(kind==='quire'){
@@ -133,7 +137,7 @@ async function openProjectDocument(path,name,projectId,localFile=null){
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null};active=ctx;
+ const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null};active=ctx;
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
@@ -142,7 +146,16 @@ async function openProjectDocument(path,name,projectId,localFile=null){
    ctx.ready=true;ctx.readyAt=performance.now();
    console.info('[ART-AE Office] iframe ready after click',Math.round(ctx.readyAt-ctx.started),'ms');
    send();
-  }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · файл '+(fileReady/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
+  }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · файл '+(fileReady/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');if(ctx.mode==='preview'){state.textContent='Создаём PDF…';frame.contentWindow.postMessage({type:'artae-office-export-pdf'},location.origin)}console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
+  else if(msg.type==='artae-office-pdf'&&ctx.mode==='preview'){
+   if(!(msg.blob instanceof Blob)||msg.blob.type!=='application/pdf')return;
+   ctx.pdfUrl=URL.createObjectURL(msg.blob);
+   frame.style.display='none';
+   const viewer=document.createElement('iframe');viewer.className='artaePdfViewer';
+   viewer.title='PDF — '+name;viewer.src=ctx.pdfUrl;viewer.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads');
+   const link=document.createElement('a');link.className='artaePdfFallback';link.href=ctx.pdfUrl;link.target='_blank';link.rel='noopener';link.textContent='Открыть PDF в новой вкладке';
+   frame.parentElement.append(viewer,link);state.textContent='Просмотр PDF';
+  }
   else if(msg.type==='artae-office-close-result'){
    clearTimeout(ctx.closeTimer);ctx.closeTimer=null;ctx.closing=false;closeButton.disabled=false;
    if(msg.closed)finishDocxClose(ctx);
@@ -171,12 +184,16 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
 }
 document.addEventListener('click',event=>{
- const button=event.target.closest('[data-act="officeEdit"]');if(!button)return;
+ const button=event.target.closest('[data-act="officeEdit"],[data-act="filesPreview"]');if(!button)return;
+ const preview=button.dataset.act==='filesPreview';
+ if(preview&&!/\.(docx|xlsx)$/i.test(button.dataset.name||''))return;
  event.preventDefault();event.stopImmediatePropagation();
- openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||'')
+ openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||project,null,preview?'preview':'edit')
   .catch(error=>alert('Не удалось открыть редактор: '+String(error?.message||error)));
 },true);
 const css=document.createElement('style');css.textContent=`
+.artaePdfViewer{flex:1;width:100%;height:100%;border:0;min-height:0}
+.artaePdfFallback{font:13px sans-serif;padding:5px 12px}
 .artaeOfficeWarmHost{position:fixed;left:0;top:0;width:min(1100px,100vw);height:80vh;opacity:0;pointer-events:none;z-index:-1;overflow:hidden}
 .artaeOfficeWarmHost iframe{width:100%;height:100%;border:0}
 .artaeOfficeWarmHost.artaeOfficeWarmActive{inset:0;width:100%;height:100dvh;opacity:1;pointer-events:auto;z-index:100001;display:flex;flex-direction:column;background:var(--surface,#fff)}

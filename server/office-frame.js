@@ -26,6 +26,19 @@ addEventListener('message',async event=>{
   }
   return;
  }
+ if(msg.type==='artae-office-export-pdf'){
+  try{
+   if(!ready())throw Error('Редактор ещё не готов');
+   const kind=document.documentElement.dataset.app;
+   const blob=kind==='quire'?await window.L.app.buildPDF():
+    kind==='ledger'?await window.L.print.exportPDF({what:'workbook',returnBlob:true}):null;
+   if(!(blob instanceof Blob)||blob.type!=='application/pdf')throw Error('Экспорт PDF не вернул документ');
+   if(blob.size>60*1024*1024)throw Error('PDF превышает 60 МБ');
+   window.parent.postMessage({type:'artae-office-pdf',blob},origin);
+  }catch(error){window.parent.postMessage({type:'artae-office-error',message:String(error?.message||error)},origin)}
+  finally{window.L?.ui?.busy?.(false)}
+  return;
+ }
  if(msg.type!=='artae-office-open')return;
  if(!ready()){window.parent.postMessage({type:'artae-office-error',message:'Редактор ещё не готов'},origin);return}
  const expected=document.documentElement.dataset.app==='quire'?'.docx':'.xlsx';

@@ -58,7 +58,8 @@ export default async function handler(req){
     const rows=await db('artae_messages',{id:'in.('+msgIds.slice(i,i+80).join(',')+')',deleted_at:'is.null',select:'id,body,conversation_id',limit:'80'});
     for(const m of rows)byId.set(m.id,m);
    }
-   return reply({pins:pins.map(p=>({...mapPin(p),previewText:p.item_kind==='message'?(byId.get(p.item_key)?.body||'Сообщение удалено'):p.item_key,convoId:byId.get(p.item_key)?.conversation_id||null}))});
+   const alive=pins.filter(p=>p.item_kind!=='message'||byId.has(p.item_key));
+   return reply({pins:alive.map(p=>({...mapPin(p),previewText:p.item_kind==='message'?byId.get(p.item_key).body:p.item_key,convoId:byId.get(p.item_key)?.conversation_id||null}))});
   }
   const {action,project,scope,scopeId,kind,item}=arg;
   if(action==='remove'){
@@ -68,6 +69,23 @@ export default async function handler(req){
    await activeProject(rows[0].project_id);
    await db('artae_pins',{id:'eq.'+arg.id},'DELETE');
    return reply({ok:true});
+  }
+  if(action==='verifyMissing'){
+   if(!uuid(arg.id))return reply({error:'Неверное закрепление'},400);
+   const rows=await db('artae_pins',{id:'eq.'+arg.id,item_kind:'eq.file',select:'*',limit:'1'});
+   if(!rows.length)return reply({ok:true,removed:false});
+   const pin=rows[0];await activeProject(pin.project_id);
+   if(!validItem('file',pin.item_key))return reply({error:'Недопустимый файл'},400);
+   const projectRows=await db('artae_projects',{id:'eq.'+pin.project_id,select:'folder_path',limit:'1'});
+   const folder=projectRows[0]?.folder_path;
+   if(!folder||!/^app:\/[^/]+$/.test(folder))return reply({error:'Недопустимая папка проекта'},400);
+   const token=process.env.YANDEX_DISK_TOKEN;
+   if(!token)return reply({error:'Яндекс Диск не настроен'},503);
+   const check=new URL('https://cloud-api.yandex.net/v1/disk/resources');
+   check.searchParams.set('path',folder+'/'+pin.item_key);check.searchParams.set('fields','name,type');
+   const found=await fetch(check,{headers:{Authorization:'OAuth '+token},signal:AbortSignal.timeout(15000)});
+   if(found.status!==404)return reply({ok:true,removed:false});
+   await db('artae_pins',{id:'eq.'+pin.id},'DELETE');return reply({ok:true,removed:true});
   }
   if(action==='note'){
    if(!uuid(arg.id)||typeof arg.note!=='string'||arg.note.length>300)return reply({error:'Недопустимое примечание'},400);

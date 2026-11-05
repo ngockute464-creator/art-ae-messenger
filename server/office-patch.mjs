@@ -16,6 +16,12 @@ try{
   if(!existsSync(join(source,path)))throw Error('VibeOffice is missing '+path);
  }
  cpSync(source,'public/office',{recursive:true});
+ const printPath='public/office/ledger/js/print.js';
+ let print=readFileSync(printPath,'utf8');
+ const pdfAnchor='      ui.busy(false);\n      const name = (A.books[A.cur]';
+ if(!print.includes(pdfAnchor))throw Error('Pinned Ledger PDF export has changed');
+ print=print.replace(pdfAnchor,'      ui.busy(false);\n      if (opts.returnBlob) return pdf;\n      const name = (A.books[A.cur]');
+ writeFileSync(printPath,print);
  const bridge='<script src="../artae-bridge.js" defer></script>';
  for(const kind of ['quire','ledger']){
   const page='public/office/'+kind+'/index.html';
