@@ -8,6 +8,7 @@ if(window.__ARTAE_OFFICE_READY__)return;
 window.__ARTAE_OFFICE_READY__=true;
 let active=null;
 let warmDocx=null;
+let warmXlsx=null;
 function makeOfficeFrame(kind,name){
  const frame=document.createElement('iframe');
  frame.className='artaeOfficeFrame';
@@ -36,6 +37,23 @@ function prewarmOfficeDocx(){
  window.addEventListener('message',ctx.listener);
  document.body.append(host);
 }
+// Ledger is prepared after file-list rendering. Keep it mounted so opening it
+// does not reset the iframe. Never prefetch project files or credentials.
+function prewarmOfficeXlsx(){
+ if(warmXlsx||active)return;
+ const frame=makeOfficeFrame('ledger','предварительная загрузка XLSX');
+ const host=document.createElement('div');host.className='artaeOfficeWarmHost';host.append(frame);
+ const ctx={host,frame,ready:false,started:performance.now()};warmXlsx=ctx;
+ ctx.listener=event=>{
+  if(warmXlsx!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
+  if(event.data?.type==='artae-office-ready'){
+   ctx.ready=true;
+   console.info('[ART-AE Office] XLSX prewarmed in '+Math.round(performance.now()-ctx.started)+' ms');
+  }
+ };
+ window.addEventListener('message',ctx.listener);document.body.append(host);
+}
+window.ARTAE_OFFICE_PREWARM_XLSX=prewarmOfficeXlsx;
 // Expose only the optional warm-up function to the file browser.
 window.ARTAE_OFFICE_PREWARM=prewarmOfficeDocx;
 
@@ -43,6 +61,7 @@ function close(){
  const a=active;if(!a)return;active=null;
  window.removeEventListener('message',a.message);
  a.overlay.remove();
+ if(a.kind==='ledger')setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},800);
 }
 function finishDocxClose(ctx){
  if(active!==ctx)return;
@@ -63,6 +82,7 @@ function finishDocxClose(ctx){
  warmDocx=warm;
  window.addEventListener('message',warm.listener);
  console.info('[ART-AE Office] DOCX reset completed; ready instance retained');
+ if(!warmXlsx)setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},1000);
 }
 async function openProjectDocument(path,name,projectId,localFile=null){
  if(active)return;
@@ -91,13 +111,14 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  top.append(title,state,hint,closeButton);
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
  if(kind==='quire'&&!warmDocx)prewarmOfficeDocx();
- const warm=kind==='quire'?warmDocx:null;
- const warmInfo=kind==='quire'?(warm?(warm.ready?'готов до клика':'запущен, но не готов'):'не запускался'):'не предусмотрен';
+ if(kind==='ledger'&&!warmXlsx)prewarmOfficeXlsx();
+ const warm=kind==='quire'?warmDocx:warmXlsx;
+ const warmInfo=warm?(warm.ready?'готов до клика':'запущен, но не готов'):'не запускался';
  const warmAge=warm?Math.round(performance.now()-warm.started):0;
  console.info('[ART-AE Office] warmup at click:',{kind,warmInfo,warmAgeMs:warmAge});
  if(warm){
   window.removeEventListener('message',warm.listener);
-  warmDocx=null;
+  if(kind==='quire')warmDocx=null;else warmXlsx=null;
  }
  const frame=warm?.frame||makeOfficeFrame(kind,name);
  frame.title='VibeOffice — '+name;
@@ -131,7 +152,7 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  };
  window.addEventListener('message',ctx.message);
  if(!warm)document.body.append(overlay);
- if(ctx.prewarmed)console.info('[ART-AE Office] Reusing ready DOCX editor');
+ if(ctx.prewarmed)console.info('[ART-AE Office] Reusing ready '+kind+' editor');
  try{
   // Existing session-protected files API; no credentials given to the editor.
   let blob=localFile;
@@ -150,22 +171,6 @@ async function openProjectDocument(path,name,projectId,localFile=null){
  }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
 }
 document.addEventListener('click',event=>{
- const local=event.target.closest('[data-act="officeLocalFile"]');
- if(local){
-  event.preventDefault();event.stopImmediatePropagation();
-  const input=document.createElement('input');
-  input.type='file';input.accept='.docx,.xlsx';input.hidden=true;
-  document.body.append(input);
-  input.addEventListener('change',()=>{
-   const file=input.files?.[0];input.remove();
-   if(!file)return;
-   if(!/\.(docx|xlsx)$/i.test(file.name))return alert('Выберите DOCX или XLSX');
-   if(file.size>3*1024*1024)return alert('Для теста поддерживаются файлы до 3 МБ');
-   openProjectDocument('',file.name,'',file).catch(e=>alert('Ошибка редактора: '+String(e?.message||e)));
-  },{once:true});
-  input.click();
-  return;
- }
  const button=event.target.closest('[data-act="officeEdit"]');if(!button)return;
  event.preventDefault();event.stopImmediatePropagation();
  openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||'')

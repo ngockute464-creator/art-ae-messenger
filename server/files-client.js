@@ -1,6 +1,7 @@
 // Project file explorer: no credentials or Yandex URLs exposed to the browser.
 let explorer={project:null,path:'',items:[],loading:false,error:'',hasMore:false};
 let explorerRequest=0;
+let explorerUploading=null;
 const explorerLimit=3*1024*1024;
 async function explorerApi(action,params){
  const api='/.netlify/functions/files-explorer';
@@ -42,6 +43,7 @@ async function explorerLoad(path=''){
  // Optional editor must never prevent file listing.
  if(id&&id===project&&!explorer.error){
   setTimeout(()=>{try{window.ARTAE_OFFICE_PREWARM?.()}catch(error){console.warn('DOCX warm-up:',error)}},750);
+  setTimeout(()=>{try{window.ARTAE_OFFICE_PREWARM_XLSX?.()}catch(error){console.warn('XLSX warm-up:',error)}},2500);
  }
 }
 async function explorerMkdir(){
@@ -54,19 +56,43 @@ async function explorerMkdir(){
  catch(error){alert(error.message||'Не удалось создать папку')}
 }
 
+function explorerUploadUpdate(){
+ const pane=root.querySelector('.explorerUploadProgress');
+ if(!pane||!explorerUploading)return;
+ const percent=explorerUploading.percent;
+ const bar=pane.querySelector('progress');if(bar){bar.value=percent;bar.removeAttribute('aria-busy')}
+ const msg=pane.querySelector('.explorerUploadLabel');
+ if(msg)msg.textContent=explorerUploading.processing?'Сохраняем файл…':('Загрузка файла: '+percent+'%');
+}
 async function explorerUpload(file){
- if(!file)return;
+ if(!file||explorerUploading)return;
  if(file.size>explorerLimit)return alert('Максимальный размер файла — 3 МБ');
  const id=project,path=explorer.path;
- const button=root.querySelector('[data-act="filesUpload"]');if(button)button.disabled=true;
+ explorerUploading={project:id,path,percent:0,processing:false};
+ if(view==='files'||railFileVisible())render();
  try{
   const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'upload',project:id,path,name:file.name});
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:file,credentials:'same-origin',cache:'no-store'});
-  let data={};try{data=await r.json()}catch{}
-  if(!r.ok)throw Error(data.error||'Не удалось загрузить файл');
-  if(id===project&&view==='files')explorerLoad(path);
- }catch(e){alert(e.message||'Не удалось загрузить файл')}
- finally{if(button?.isConnected)button.disabled=false}
+  await new Promise((resolve,reject)=>{
+   const xhr=new XMLHttpRequest();xhr.open('POST',url);
+   xhr.withCredentials=true;xhr.setRequestHeader('Content-Type','application/octet-stream');
+   xhr.upload.onprogress=event=>{
+    if(!event.lengthComputable||!explorerUploading)return;
+    explorerUploading.percent=Math.min(100,Math.round(event.loaded/event.total*100));explorerUploadUpdate();
+   };
+   xhr.upload.onload=()=>{if(explorerUploading){explorerUploading.processing=true;explorerUploading.percent=100;explorerUploadUpdate()}};
+   xhr.onerror=()=>reject(Error('Ошибка соединения при загрузке файла'));
+   xhr.onabort=()=>reject(Error('Загрузка отменена'));
+   xhr.onload=()=>{
+    let payload={};try{payload=JSON.parse(xhr.responseText)}catch{}
+    if(xhr.status<200||xhr.status>=300)reject(Error(payload.error||'Не удалось загрузить файл (HTTP '+xhr.status+')'));
+    else resolve(payload);
+   };
+   xhr.send(file);
+  });
+  // Refresh desktop rail as well as the mobile full-screen explorer.
+  if(id===project&&(view==='files'||railFileVisible())&&explorer.path===path)await explorerLoad(path);
+ }catch(error){alert(error.message||'Не удалось загрузить файл')}
+ finally{explorerUploading=null;if(view==='files'||railFileVisible())render()}
 }
 
 async function explorerFileBlob(path){
@@ -227,8 +253,10 @@ function filesView(){
    return '<div class="fileEntry"><span class="fileActionButtons">'+editAction+'<button type="button" class="fileActionBtn" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'" title="Посмотреть" aria-label="Посмотреть '+esc(item.name)+'">🔍</button><button type="button" class="fileActionBtn" data-act="filesDownload" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Скачать" aria-label="Скачать '+esc(item.name)+'">↓</button></span><button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'">'+esc(item.name)+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn" data-act="pinFile" data-path="'+esc(item.path)+'" title="Закрепить в проекте" aria-label="Закрепить '+esc(item.name)+'">📌</button></div>';
 
  }).join('');
+ const upload=explorerUploading&&explorerUploading.project===explorer.project&&explorerUploading.path===explorer.path;
+ const uploadStatus=upload?'<div class="explorerUploadProgress" role="status"><span class="explorerUploadLabel">Загрузка файла: '+explorerUploading.percent+'%</span><progress max="100" value="'+explorerUploading.percent+'" style="width:100%;display:block;margin-top:6px"></progress></div>':'';
  const body=explorer.loading?'<div class="empty">Загрузка…</div>':explorer.error?'<div class="empty"><p>'+esc(explorer.error)+'</p><button class="btn" data-act="filesReload">Повторить</button></div>':list||'<div class="empty"><h3>Папка пуста</h3><p>Загрузите файл или создайте папку.</p></div>';
- return '<section class="pane explorerPane"><div class="explorerToolbar"><div><h2>Файлы проекта</h2><p class="help explorerPath">'+esc(cp()?.name||'Проект')+breadcrumbs+'</p></div><div class="explorerActions"><input id="explorerUpload" type="file" hidden><button type="button" class="btn small" data-act="filesUpload"'+(explorer.loading?' disabled':'')+'>↑ Загрузить</button><button type="button" class="btn small primary" data-act="filesMkdir"'+(explorer.loading?' disabled':'')+'>＋ Папка</button></div></div>'+back+'<div class="explorerList">'+body+'</div>'+(explorer.hasMore?'<p class="help">Показана часть элементов папки.</p>':'')+'</section>';
+ return '<section class="pane explorerPane"><div class="explorerToolbar"><div><h2>Файлы проекта</h2><p class="help explorerPath">'+esc(cp()?.name||'Проект')+breadcrumbs+'</p></div><div class="explorerActions"><input id="explorerUpload" type="file" hidden><button type="button" class="btn small" data-act="filesUpload"'+(explorer.loading||explorerUploading?' disabled':'')+'>↑ Загрузить</button><button type="button" class="btn small primary" data-act="filesMkdir"'+(explorer.loading?' disabled':'')+'>＋ Папка</button></div></div>'+uploadStatus+back+'<div class="explorerList">'+body+'</div>'+(explorer.hasMore?'<p class="help">Показана часть элементов папки.</p>':'')+'</section>';
 }
 
 async function trashProject(id){
