@@ -12,11 +12,10 @@ function close(){
  window.removeEventListener('message',a.message);
  a.overlay.remove();
 }
-async function openProjectDocument(path,name){
+async function openProjectDocument(path,name,projectId){
  if(active)return;
  if(!/\.(docx|xlsx)$/i.test(name))return;
- const projectId=typeof project==='string'?project:null;
- if(!projectId){alert('Сначала выберите проект, затем откройте документ.');return;}
+ if(!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
  const overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
  const box=document.createElement('section');box.className='artaeOfficePanel';
  box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Редактирование '+name);
@@ -47,9 +46,13 @@ async function openProjectDocument(path,name){
  document.body.append(overlay);
  try{
   // Existing session-protected files API; no credentials given to the editor.
-  const blob=await explorerFileBlob(path);
+  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project:projectId,path});
+  const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok){let details={};try{details=await response.json()}catch{}
+   throw Error(details.error||'Не удалось получить документ: HTTP '+response.status)}
+  const blob=await response.blob();
+  if(blob.size>3*1024*1024)throw Error('Файл превышает лимит 3 МБ');
   if(active!==ctx)return;
-  if(project!==projectId)throw Error('Изменился выбранный проект');
   ctx.buffer=await blob.arrayBuffer();
   if(ctx.ready&&!ctx.sent){ctx.sent=true;frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ…'}
  }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
@@ -57,7 +60,7 @@ async function openProjectDocument(path,name){
 document.addEventListener('click',event=>{
  const button=event.target.closest('[data-act="officeEdit"]');if(!button)return;
  event.preventDefault();event.stopImmediatePropagation();
- openProjectDocument(button.dataset.path||'',button.dataset.name||'')
+ openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||'')
   .catch(error=>alert('Не удалось открыть редактор: '+String(error?.message||error)));
 },true);
 const css=document.createElement('style');css.textContent=`
