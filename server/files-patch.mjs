@@ -8,7 +8,8 @@ const replace=(oldText,newText,label)=>{
 };
 const client=readFileSync('server/files-client.js','utf8');
 const resizeClient=readFileSync('server/layout-resize.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\nfunction cp(){','client and resize functions');
+const uxClient=readFileSync('server/ux-client.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\nfunction cp(){','client and resize functions');
 replace('return '+b+'<aside class="convos">${convos().map',
         'return '+b+'<aside class="convos"><button class="add explorerLink" type="button" data-act="filesHome">📁 Файлы проекта</button>${convos().map',
         'project file navigation');
@@ -35,6 +36,18 @@ replace("<button type=\"button\" role=\"menuitem\" data-act=\"authUsers\">Пол
 replace("<button type=\"submit\" class=\"btn primary\">Сохранить</button>","${modal.type==='editProject'&&window.ARTAE_AUTH?.getUser()?.role==='admin'?'<button type=\"button\" class=\"btn\" data-act=\"trashProject\" data-id=\"'+esc(modal.id)+'\">Удалить проект</button>':''}<button type=\"submit\" class=\"btn primary\">Сохранить</button>","project delete button");
 replace("if(action==='filesHome')openExplorer();","if(action==='trashProject')trashProject(id);else if(action==='restoreProjects')restoreProjectPicker();else if(action==='filesHome')openExplorer();","project archive handlers");
 
+replace("data.pins=preferences.pins||[];data.labels=preferences.labels||[];","data.pins=[];data.labels=preferences.labels||[];",'ux patch 1');
+replace("profile:data.profile,pins:data.pins,labels:data.labels","profile:data.profile,labels:data.labels",'ux patch 2');
+replace("async function beginSync(){try{await syncOverview();syncReady=true;","async function beginSync(){try{await syncOverview();restoreWorkplace();await refreshPins();queueMicrotask(()=>refreshRailFiles());syncReady=true;",'ux patch 3');
+replace("📌 Закреплено</button>","📌 <span class=\"pinLabel\">Закреплено</span></button>",'ux patch 4');
+replace("${backButton}${pinButton}<div class=\"profileMenuWrap\">","${backButton}${pinButton}<button type=\"button\" class=\"btn small headerNav mobileFilesTop\" data-act=\"filesHome\" title=\"Файлы проекта\" aria-label=\"Файлы проекта\">📁</button><div class=\"profileMenuWrap\">",'ux patch 5');
+replace("<div class=\"app mobile-${view}\">","<div class=\"app mobile-${view}${railCollapsed?' rail-collapsed':''}\">",'ux patch 6');
+replace("${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}","${view==='files'?filesView():view==='pins'||view==='projectpins'?pinsView():chatView()}${view==='chat'?desktopRail():''}",'ux patch 7');
+replace("Закрепления пока сохраняются только на этом устройстве","Общие закрепления всех участников",'ux patch 8');
+replace("function pinCard(p){let msg=p.kind==='message'?data.messages.find(m=>m.id===p.item):data.messages.find(m=>m.id===data.files.find(f=>f.id===p.item)?.message);","function pinCard(p){let msg=p.kind==='message'?(data.messages.find(m=>m.id===p.item)||{id:p.item,convo:p.convoId,text:p.previewText,who:'',time:p.createdAt}):data.messages.find(m=>m.id===data.files.find(f=>f.id===p.item)?.message);",'ux patch 9');
+replace("let file=p.kind==='file'?data.files.find(f=>f.id===p.item):null;let actions=","let file=p.kind==='file'?(data.files.find(f=>f.id===p.item)||{name:p.item.split('/').pop()}):null;let actions=",'ux patch 10');
+replace("if(pin)pin.note=val;persist();","if(pin){await updateRemoteNote(m.id,val);pin.note=val;}",'ux patch 11');
+replace("if(action==='toggleProfileMenu'){","if(action==='railCollapse'){railCollapsed=!railCollapsed;saveWorkplace();render();return}if(action==='railSection'){workspaceState['collapsed_'+scope]=!workspaceState['collapsed_'+scope];try{localStorage.setItem(WORKSPACE_KEY,JSON.stringify(workspaceState))}catch{}render();return}if(action==='railJumpPin'){railJumpPin(id,el.dataset.convo);return}if(action==='pinFile'){toggleRemotePin('file',el.dataset.path,'project',project);return}if(action==='togglePin'){toggleRemotePin(kind,id,scope,scope==='project'?project:convo);openMenu=null;render();return}if(action==='removePin'){removeRemotePin(id);return}if(action==='goMessage'&&!data.messages.find(m=>m.id===id)){const pin=data.pins.find(p=>p.item===id);if(pin?.convoId){railJumpPin(id,pin.convoId);return}}if(action==='toggleProfileMenu'){",'ux patch 12');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
@@ -85,4 +98,30 @@ css+='\n'+[
 
 '@media(max-width:720px){.explorerPane{padding:14px}.explorerToolbar h2{font-size:18px}.fileEntry{padding:12px 9px}}'
 ].join('\n');
+css+='\n'+[".mobileFilesTop{display:none}",
+".explorerLink{display:block}",
+".app.mobile-chat .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr) var(--rail-width,280px)}",
+".app.mobile-chat.rail-collapsed .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr) 52px}",
+".desktopRail{min-width:0;overflow:auto;background:#fafcff;border-left:1px solid #e4eaf3;display:flex;flex-direction:column;gap:10px;padding:12px}",
+".desktopRailGrip{position:absolute;right:var(--rail-width,280px);width:8px;top:0;bottom:0;z-index:7;cursor:col-resize}",
+".rail-collapsed .desktopRailGrip{display:none}",
+".rail-collapsed .desktopRail{padding:4px;overflow:hidden}.rail-collapsed .railTop strong{display:none}",
+".railTop{display:flex;align-items:center;justify-content:space-between;padding:5px 3px;font-size:13px}",
+".railSection{border:1px solid #e0e7f0;background:#fff;border-radius:10px;overflow:hidden;min-width:0}",
+".railSectionTitle{width:100%;border:0;background:#f8faff;display:flex;align-items:center;justify-content:space-between;text-align:left;padding:11px;font-weight:650;font-size:12px;cursor:pointer}",
+".railSectionBody{padding:7px 9px;max-height:230px;overflow-y:auto}",
+".railItem{display:flex;align-items:center;gap:4px;border-bottom:1px solid #eef1f5;padding:4px 0}",
+".railItemName,.railPinnedItem{font-size:12px;text-align:left;overflow-wrap:anywhere;background:transparent;border:0;color:#31455e;cursor:pointer;padding:6px 4px;width:100%}",
+".railItemName:hover,.railPinnedItem:hover{color:#2164bc;background:#f0f6ff}",
+".railMini{border:0;border-radius:7px;background:transparent;cursor:pointer;padding:5px 7px;color:#44617d}",
+".railMini:hover{background:#edf4ff}",
+".railAll{border:0;background:transparent;color:#2869dc;font-size:11px;padding:7px 4px;cursor:pointer}",
+".railPinnedItem{display:block;border-bottom:1px solid #eef1f5}",
+".railEmpty{font-size:12px;color:#8a96a7;margin:5px}",
+".fileEntryNameAction{flex:1;min-width:0;text-align:left;border:0;background:transparent;color:inherit;padding:6px 0;cursor:pointer;overflow-wrap:anywhere}",
+".fileEntryNameAction:hover{text-decoration:underline;color:#2363bd}",
+"button.fileActionBtn{cursor:pointer}",
+"button[data-act],.navitem,.railItemName,.railPinnedItem{cursor:pointer}",
+"@media(max-width:1180px){.desktopRail,.desktopRailGrip{display:none}.app.mobile-chat .split,.app.mobile-chat.rail-collapsed .split{grid-template-columns:var(--convo-col-width,250px) minmax(0,1fr)}}",
+"@media(max-width:650px){.mobileFilesTop{display:inline-flex}.pinLabel{display:none}.explorerLink{display:none}.app.mobile-chat .split,.app.mobile-chat.rail-collapsed .split{display:block}.app.mobile-chat .convos{display:none}}"].join('\n');
 writeFileSync(cssFile,css);

@@ -3,6 +3,7 @@ import {copyFileSync,readFileSync,writeFileSync} from 'node:fs';
 copyFileSync('server/sync-pg.mjs','netlify/functions/sync.mjs');
 copyFileSync('server/project-rename.mjs','netlify/functions/project-rename.mjs');
 copyFileSync('server/files-explorer.mjs','netlify/functions/files-explorer.mjs');
+copyFileSync('server/pins-api.mjs','netlify/functions/pins.mjs');
 copyFileSync('server/realtime-token.mjs','netlify/functions/realtime-token.mjs');
 copyFileSync('server/jwt-standby-probe.mjs','netlify/functions/jwt-standby-probe.mjs');
 copyFileSync('netlify/functions/auth.mjs','netlify/functions/auth-disk.mjs');
@@ -89,7 +90,11 @@ replaceOnce(
 
 writeFileSync(file,app);
 const sw='public/sw.js';
-let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-files-preview-v5');
+let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-shared-pins-rail-v6');
 writeFileSync(sw,worker);
 await import('../server/files-patch.mjs');
+// Reject stale or invalid generated client before publishing.
+const finalClient=readFileSync('public/app.js','utf8');
+new Function(finalClient);
+for(const marker of ['desktopRail()', 'refreshPins()', 'fileEntryNameAction', 'restoreWorkplace()'])if(!finalClient.includes(marker))throw Error('Missing UX feature: '+marker);
 console.log('ART-AE: private Realtime enabled with safe polling fallback');
