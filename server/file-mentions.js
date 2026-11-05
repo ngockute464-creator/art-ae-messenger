@@ -43,6 +43,15 @@ function decorateFileReferences(html){
  }
  return tpl.innerHTML;
 }
+// Text-only readable filenames for pinned message cards.
+function pinTextSummary(value){
+ fileRefPattern.lastIndex=0;
+ return String(value||'').replace(fileRefPattern,(full,refProject,path64,name64)=>{
+  try{const path=decodeFileRefText(path64),name=decodeFileRefText(name64);
+   return validProjectFileRef(refProject,path,name)?'📎 '+name:full}
+  catch{return full}
+ });
+}
 const originalFileMentionMessageView=messageView;
 messageView=function(message){return decorateFileReferences(originalFileMentionMessageView(message))};
 let fileMentionPicker=null;

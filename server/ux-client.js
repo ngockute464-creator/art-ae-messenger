@@ -119,7 +119,7 @@ function railPinRows(scope){
  return railPins(scope).map(p=>{
   const isFile=p.kind==='file',title=p.previewText||p.item;
   const act=isFile?'filesPreview':'railJumpPin';
-  return '<div class="railPinRow"><button type="button" class="railPinnedItem" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'" title="'+(isFile?'Открыть файл':'Перейти к сообщению')+'">'+(isFile?'📄 ':'📌 ')+esc(title)+'</button><button type="button" class="railMini" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить" aria-label="Открепить">×</button></div>';
+  return '<div class="railPinRow"><button type="button" class="railPinnedItem" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'" title="'+(isFile?'Открыть файл':'Перейти к сообщению')+'">'+(isFile?'📄 ':'📌 ')+esc(pinTextSummary(title))+'</button><button type="button" class="railMini" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить" aria-label="Открепить">×</button></div>';
  }).join('');
 }
 function desktopRail(){

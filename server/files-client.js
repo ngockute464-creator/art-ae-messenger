@@ -71,6 +71,7 @@ async function explorerCheckChanges(){
    const pane=root.querySelector('.explorerPane');
    if(pane)pane.scrollTop=scroll;
   }
+  if(!result.hasMore)void explorerReconcileMissing(items,id,path);
  }catch(error){console.warn('File auto-refresh:',error)}
  finally{explorerPolling=false}
 }
@@ -87,9 +88,22 @@ async function explorerDelete(path,name){
  explorerDeleting=true;
  try{
   await explorerApi('delete',{project:id,path});
+  await refreshPins();
   if(id===project&&folder===explorer.path&&(view==='files'||railFileVisible()))await explorerLoad(folder);
  }catch(error){alert(error.message||'Не удалось удалить файл')}
  finally{explorerDeleting=false}
+}
+async function explorerReconcileMissing(items,id,folder){
+ const live=new Set(items.map(x=>x.path));
+ const pins=data.pins.filter(x=>x.project===id&&x.kind==='file'&&
+  x.item.split('/').slice(0,-1).join('/')===folder&&!live.has(x.item));
+ for(const pin of pins.slice(0,10)){
+  if(document.hidden||id!==project||explorer.path!==folder)return;
+  try{
+   const r=await pinsRequest('verifyMissing',{id:pin.id});
+   if(r.removed)await refreshPins();
+  }catch(e){console.warn('Pin verification:',e)}
+ }
 }
 async function explorerMkdir(){
  const name=prompt('Название новой папки');
