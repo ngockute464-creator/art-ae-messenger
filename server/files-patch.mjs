@@ -30,6 +30,17 @@ replace('${convoNav()}${view===',
         '${convoNav()}<div class="columnGrip convoGrip" data-resize="conversations" role="separator" tabindex="0" aria-label="Ширина списка разговоров" aria-orientation="vertical" title="Изменить ширину списка разговоров"></div>${view===',
         'conversation resizer');
 
+
+replace('<button class="add" data-act="newProject">＋ Создать проект</button></aside>',
+        '<button class="add" data-act="newProject">＋ Создать проект</button>\x24{window.ARTAE_AUTH?.getUser()?.role===\'admin\'?\'<button class="add" type="button" data-act="restoreProjects">Восстановить проект</button>\':\'\'}</aside>',
+        'admin trash navigation');
+replace('<button type="submit" class="btn primary">Сохранить</button>',
+        '\x24{modal.type===\'editProject\'&&window.ARTAE_AUTH?.getUser()?.role===\'admin\'?\'<button type="button" class="btn" data-act="trashProject" data-id="\'+esc(modal.id)+\'">Удалить проект</button>\':\'\'}<button type="submit" class="btn primary">Сохранить</button>',
+        'delete project in edit dialog');
+replace("if(action==='filesHome')openExplorer();",
+        "if(action==='trashProject')trashProject(id);else if(action==='restoreProjects')restoreProjectPicker();else if(action==='filesHome')openExplorer();",
+        'trash and restore actions');
+
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
