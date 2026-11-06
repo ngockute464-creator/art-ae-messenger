@@ -31,6 +31,6 @@ test('message edit controls stay on one row with saved handlers',()=>{
  assert.match(patch,/message edit attach inline/);
  assert.match(patch,/data-act="addEditFile"/);
  assert.match(patch,/type="submit">Сохранить<\/button>/);
- assert.match(patch,/data-act="cancelEdit"/);
+ assert.match(patch,/message edit save inline/);
  assert.match(patch,/\.messageEdit \.editActions\{display:flex;flex-wrap:nowrap/);
 });
