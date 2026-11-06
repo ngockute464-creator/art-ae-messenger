@@ -4,12 +4,12 @@ let explorerRequest=0;
 let explorerUploading=null;
 let explorerDeleting=false;
 let explorerPolling=false;
-const explorerLimit=3*1024*1024;
+const explorerLegacyTransferLimit=3*1024*1024;
 async function explorerApi(action,params){
  const api='/.netlify/functions/files-explorer';
  const options={credentials:'same-origin',cache:'no-store'};
  let endpoint=api;
- if(action==='list')endpoint+='?'+new URLSearchParams({action,project:params.project,path:params.path});
+ if(action==='list'||action==='downloadLink')endpoint+='?'+new URLSearchParams({action,project:params.project,path:params.path});
  else {options.method='POST';options.headers={'Content-Type':'application/json'};options.body=JSON.stringify({action,...params})}
  const result=await fetch(endpoint,options);
  let payload={};try{payload=await result.json()}catch{}
@@ -145,9 +145,38 @@ function explorerSendUpload(file,id,path,overwrite){
   xhr.send(file);
  });
 }
+function explorerSendDirect(file,id,path,overwrite){
+ return new Promise(async(resolve,reject)=>{
+  let link;
+  try{link=await explorerApi('uploadLink',{project:id,path,name:file.name,overwrite})}
+  catch(error){reject(error);return}
+  let url;
+  try{
+   url=new URL(link.href);
+   const host=url.hostname.toLowerCase();
+   if(url.protocol!=='https:'||!(host.endsWith('.yandex.ru')||host==='yandex.ru'||host.endsWith('.yandex.net')||host==='yandex.net'||host.endsWith('.yandexcloud.net')||host==='yandexcloud.net'))throw Error('Неверный адрес');
+  }catch(error){reject(error);return}
+  const xhr=new XMLHttpRequest();xhr.open(link.method==='POST'?'POST':'PUT',url.href,true);
+  xhr.withCredentials=false;
+  xhr.upload.onprogress=event=>{
+   if(!event.lengthComputable||!explorerUploading)return;
+   explorerUploading.percent=Math.min(100,Math.round(100*event.loaded/event.total));
+   explorerUploadUpdate();
+  };
+  xhr.upload.onload=()=>{if(explorerUploading){explorerUploading.processing=true;explorerUploading.percent=100;explorerUploadUpdate()}};
+  xhr.onerror=()=>reject(Error('Прямая загрузка заблокирована браузером или сетью (возможно, CORS).'));
+  xhr.onabort=()=>reject(Error('Загрузка отменена'));
+  xhr.onload=()=>{
+   if(xhr.status===409||xhr.status===412)reject(Object.assign(Error('Файл с таким именем уже существует'),{status:409}));
+   else if(xhr.status>=200&&xhr.status<300)resolve({ok:true});
+   else reject(Error('Яндекс Диск не принял файл (HTTP '+xhr.status+')'));
+  };
+  xhr.send(file);
+ });
+}
+
 async function explorerUpload(file){
  if(!file||explorerUploading)return;
- if(file.size>explorerLimit){alert('Максимальный размер файла — 3 МБ');return}
  const id=project,path=explorer.path;
  const existing=explorer.project===id&&explorer.path===path&&explorer.items.some(x=>x.type==='file'&&x.name===file.name);
  let overwrite=existing;
@@ -156,13 +185,13 @@ async function explorerUpload(file){
  if(view==='files'||railFileVisible())render();
  explorerUploadUpdate();
  try{
-  try{await explorerSendUpload(file,id,path,overwrite)}
+  try{await explorerSendDirect(file,id,path,overwrite)}
   catch(error){
    if(error.status!==409||overwrite)throw error;
    if(!confirm('Файл «'+file.name+'» уже существует. Заменить его?'))return;
    overwrite=true;
    if(explorerUploading){explorerUploading.percent=0;explorerUploading.processing=false;explorerUploadUpdate()}
-   await explorerSendUpload(file,id,path,true);
+   await explorerSendDirect(file,id,path,true);
   }
   if(id===project&&(view==='files'||railFileVisible())&&explorer.path===path)await explorerLoad(path);
  }catch(error){alert(error.message||'Не удалось загрузить файл')}
@@ -170,19 +199,26 @@ async function explorerUpload(file){
 }
 
 async function explorerFileBlob(path){
+ const item=explorer.items.find(x=>x.path===path);
+ if(item&&item.size>explorerLegacyTransferLimit){
+  const link=await explorerApi('downloadLink',{project,path});
+  let response;
+  try{response=await fetch(link.href,{credentials:'omit',cache:'no-store'})}
+  catch{throw Error('Браузер не разрешил просмотр большого файла через Яндекс Диск. Используйте «Скачать».')}
+  if(!response.ok)throw Error('Не удалось прочитать файл с Яндекс Диска');
+  return response.blob();
+ }
  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project,path});
  const r=await fetch(url,{credentials:'same-origin',cache:'no-store'});
  if(!r.ok){let data={};try{data=await r.json()}catch{};throw Error(data.error||'Не удалось получить файл')}
- const blob=await r.blob();
- if(blob.size>explorerLimit)throw Error('Файл превышает лимит 3 МБ');
- return blob;
+ return r.blob();
 }
 async function explorerDownload(path,name){
  try{
-  const blob=await explorerFileBlob(path);
-  const href=URL.createObjectURL(blob),link=document.createElement('a');
-  link.href=href;link.download=name;document.body.append(link);link.click();link.remove();
-  setTimeout(()=>URL.revokeObjectURL(href),30000);
+  const result=await explorerApi('downloadLink',{project,path});
+  const link=document.createElement('a');
+  link.href=result.href;link.download=name;link.rel='noreferrer';
+  document.body.append(link);link.click();link.remove();
  }catch(e){alert(e.message||'Не удалось скачать файл')}
 }
 function explorerKind(name,mime){

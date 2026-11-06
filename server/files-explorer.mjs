@@ -178,6 +178,20 @@ export default async function handler(request){
   }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||''};
   const p=await project(args.project);
   const rel=relative(args.path||'');
+  if(args.action==='uploadLink'&&request.method==='POST'){
+   const name=fileName(args.name);
+   const target=apiPath(p.folder_path,rel?rel+'/'+name:name);
+   const link=await disk('GET','/resources/upload',{path:target,overwrite:args.overwrite===true?'true':'false'});
+   return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
+  }
+  if(args.action==='downloadLink'&&request.method==='GET'){
+   if(!rel)throw Object.assign(Error('Выберите файл'),{status:400});
+   const path=apiPath(p.folder_path,rel);
+   const meta=await disk('GET','/resources',{path,fields:'type,size'});
+   if(meta.type!=='file')throw Object.assign(Error('Это не файл'),{status:400});
+   const link=await disk('GET','/resources/download',{path});
+   return response({href:transferUrl(link.href).toString(),size:meta.size});
+  }
   if(args.action==='list'&&request.method==='GET'){
    const result=await list(p.folder_path,rel);
    return response({project:{id:p.id,name:p.name},path:rel,...result});

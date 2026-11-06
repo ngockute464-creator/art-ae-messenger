@@ -1,0 +1,4 @@
+# E13: file transfers without artificial 3 MB cap — staged
+The file-browser UI no longer rejects files above 3 MB. Authenticated Netlify endpoints return short-lived Yandex Disk upload/download URLs scoped to selected files, while file bytes transfer directly between the browser and Yandex. OAuth keys stay server-side. The legacy proxied 3 MB path remains for small inline previews only.
+CAVEAT: browser cross-origin PUT to a Yandex upload host is dependent on provider CORS; live tests are required before treating this as complete. Large inline previews also depend on Yandex download CORS. For large files, download uses navigation to the temporary URL. Browser security differs from proxying: a short-lived scoped URL is exposed to the requesting authenticated browser; never log it.
+No database migration or changes to voice audio. Test on Firefox, Android, iOS and with real upload/download before publishing broadly.
