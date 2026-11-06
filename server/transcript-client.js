@@ -22,6 +22,7 @@ async function voiceReadTranscriptStatus(m){
   voiceTranscriptCache.set(m.id,result.text);
   return true;
  }
+ if(result.enabled===false)throw Error('Расшифровка ещё не подключена: нужны ключи Cloudflare в Netlify');
  return false;
 }
 async function voiceDownloadForTranscription(m,meta){

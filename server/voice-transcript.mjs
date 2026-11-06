@@ -88,12 +88,22 @@ async function putSaved(path,obj){
  return obj;
 }
 async function readAudio(req){
- const data=await req.arrayBuffer();
- if(data.byteLength<44||data.byteLength>MAX_WAV)throw fail('Недопустимый размер аудиофрагмента',413);
- const bytes=new Uint8Array(data);
- const head=Buffer.from(bytes.subarray(0,12)).toString('ascii');
- if(head.slice(0,4)!=='RIFF'||head.slice(8,12)!=='WAVE')throw fail('Требуется WAV-аудио',415);
- return Buffer.from(data);
+ // Enforce the byte limit while reading, not after an unbounded arrayBuffer() allocation.
+ const expected=Number(req.headers.get('content-length'));
+ if(Number.isFinite(expected)&&expected>MAX_WAV)throw fail('Фрагмент аудио слишком велик',413);
+ const reader=req.body?.getReader();if(!reader)throw fail('Нет аудиоданных');
+ const chunks=[];let total=0;
+ try{
+  for(;;){
+   const {done,value}=await reader.read();if(done)break;
+   total+=value.byteLength;if(total>MAX_WAV){await reader.cancel().catch(()=>{});throw fail('Фрагмент аудио слишком велик',413)}
+   chunks.push(value);
+  }
+ }finally{reader.releaseLock()}
+ if(total<44)throw fail('Недопустимый WAV',415);
+ const data=Buffer.concat(chunks.map(x=>Buffer.from(x)),total);
+ if(data.toString('ascii',0,4)!=='RIFF'||data.toString('ascii',8,12)!=='WAVE')throw fail('Требуется WAV-аудио',415);
+ return data;
 }
 async function cloudflare(wav){
  const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_AI_TOKEN;
@@ -119,7 +129,10 @@ export default async function handler(req){
   const directory=await voiceLocation(convo,id),donePath=directory+'/transcript.json';
   const stored=await getSaved(donePath);
   if(stored)return reply({ok:true,saved:true,text:stored.text});
-  if(req.method==='GET'&&action==='status')return reply({ok:true,saved:false,text:null});
+  if(req.method==='GET'&&action==='status'){
+   const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_AI_TOKEN;
+   return reply({ok:true,saved:false,text:null,enabled:/^[a-f0-9]{32}$/i.test(account||'')&&!!token});
+  }
   if(req.method==='POST'&&action==='chunk'){
    const part=url.searchParams.get('part'),total=url.searchParams.get('total');
    if(!/^(0|[1-9]\d{0,5})$/.test(part||'')||!/^[1-9]\d{0,5}$/.test(total||'')||Number(part)>=Number(total))throw fail('Неверный номер фрагмента');
