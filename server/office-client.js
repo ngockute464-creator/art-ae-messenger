@@ -101,7 +101,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
  const top=document.createElement('header');top.className='artaeOfficeTop';
  const title=document.createElement('strong');title.textContent=name;
  const state=document.createElement('span');state.className='artaeOfficeState';state.textContent=localFile?'Читаем локальный файл…':'Загрузка файла…';
- const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent=mode==='preview'?'PDF-просмотр':'Сохранение → скачивание копии';
+ const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent=mode==='preview'?'PDF-просмотр':localFile?'Локальная копия':'Сохранение → Яндекс Диск';
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
  closeButton.addEventListener('click',()=>{
   if(kind==='quire'){
@@ -140,11 +140,35 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null};active=ctx;
- const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
+ const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false};active=ctx;
+ const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer,remoteSave:mode==='edit'&&!localFile},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
   const msg=event.data;if(!msg||typeof msg.type!=='string')return;
+  if(msg.type==='artae-office-save'){
+   if(ctx.mode!=='edit'||localFile||ctx.saving||!ctx.version||!(msg.blob instanceof Blob)||msg.blob.size===0){
+    frame.contentWindow.postMessage({type:'artae-office-save-result',requestId:msg.requestId,ok:false,error:'Сохранение недоступно'},location.origin);
+    return;
+   }
+   ctx.saving=true;state.textContent='Сохраняем на Яндекс Диск…';
+   void (async()=>{
+    let ok=false,error='';
+    try{
+     if(msg.blob.size>3*1024*1024)throw Error('Размер документа превышает лимит текущего редактора (3 МБ). Скачайте копию и загрузите через файловый проводник.');
+     const query=new URLSearchParams({action:'officeSave',project:projectId,path,expectedModified:ctx.version});
+     const response=await fetch('/.netlify/functions/files-explorer?'+query,{
+      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream'},body:msg.blob
+     });
+     let result={};try{result=await response.json()}catch{}
+     if(!response.ok)throw Error(result.error||'Ошибка сохранения (HTTP '+response.status+')');
+     if(typeof result.modified!=='string'||!result.modified)throw Error('Сервер не подтвердил новую версию документа');
+     ctx.version=result.modified;ok=true;state.textContent='Сохранено на Яндекс Диске';
+     if(typeof explorerLoad==='function'&&projectId===project&&explorer?.path===path.split('/').slice(0,-1).join('/'))void explorerLoad(explorer.path);
+    }catch(e){error=String(e?.message||e);state.textContent='Ошибка сохранения: '+error.slice(0,140)}
+    finally{ctx.saving=false;frame.contentWindow.postMessage({type:'artae-office-save-result',requestId:msg.requestId,ok,error},location.origin)}
+   })();
+   return;
+  }
   if(msg.type==='artae-office-ready'){
    ctx.ready=true;ctx.readyAt=performance.now();
    console.info('[ART-AE Office] iframe ready after click',Math.round(ctx.readyAt-ctx.started),'ms');
@@ -182,6 +206,11 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   // Existing session-protected files API; no credentials given to the editor.
   let blob=localFile;
   if(!blob){
+   const versionUrl='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'officeVersion',project:projectId,path});
+   const versionResponse=await fetch(versionUrl,{credentials:'same-origin',cache:'no-store'});
+   let info={};try{info=await versionResponse.json()}catch{}
+   if(!versionResponse.ok||typeof info.modified!=='string')throw Error(info.error||'Не удалось проверить версию документа');
+   ctx.version=info.modified;
    const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project:projectId,path});
    const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
    if(!response.ok){let details={};try{details=await response.json()}catch{}
