@@ -14,7 +14,7 @@ function voiceDuration(seconds){
  return String(Math.floor(seconds/60))+':'+String(seconds%60).padStart(2,'0');
 }
 function voiceMicButton(){
- return '<button type="button" class="btn voiceMic" data-act="voiceStart" title="Записать голосовое сообщение" aria-label="Записать голосовое сообщение">🎤</button>';
+ return '<button type="button" class="btn voiceMic" data-act="voiceStart" title="Записать голосовое сообщение" aria-label="Записать голосовое сообщение"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5m-4 0h8"/></svg></button>';
 }
 function voicePanel(){
  if(!voiceDraft||voiceDraft.convo!==convo)return '';
