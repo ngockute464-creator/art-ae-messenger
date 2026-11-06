@@ -88,6 +88,11 @@ replaceOnce(
   ,'optimistic send'
 );
 
+const syncStart=app.indexOf('async function syncMessages(force=false){');
+const syncEnd=app.indexOf('async function beginSync(){',syncStart);
+if(syncStart<0||syncEnd<0||app.indexOf('async function syncMessages(force=false){',syncStart+1)!==-1)throw Error('Sync integration anchor mismatch');
+const syncClient=readFileSync('server/sync-client.js','utf8');
+app=app.slice(0,syncStart)+syncClient+'\n'+app.slice(syncEnd);
 writeFileSync(file,app);
 const sw='public/sw.js';
 let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-file-mentions-v10');

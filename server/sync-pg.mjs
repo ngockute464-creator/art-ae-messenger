@@ -38,7 +38,8 @@ async function projectFolder(name){
  if(folder.toLowerCase()==='_system')throw Object.assign(Error('Служебное имя папки запрещено'),{status:400});
  const path='app:/'+folder;
  const res=await fetch('https://cloud-api.yandex.net/v1/disk/resources?'+new URLSearchParams({path}),{method:'PUT',headers:{Authorization:'OAuth '+token},signal:AbortSignal.timeout(12000)});
- if(!res.ok&&res.status!==409)throw Error('Yandex folder create failed: '+res.status);
+ if(res.status===409)throw Object.assign(Error('Папка проекта уже существует на Яндекс Диске'),{status:409});
+ if(!res.ok)throw Error('Yandex folder create failed: '+res.status);
  return path;
 }
 function failed(e){
@@ -130,11 +131,34 @@ export default async function handler(req){
    if(!uuid(id))return reply({error:'Invalid conversation'},400);
    if(!await activeConvo(id))return reply({error:'Беседа не найдена'},404);
    const since=Number(url.searchParams.get('since')||0);
-   if(!Number.isFinite(since)||since<0)return reply({error:'Invalid cursor'},400);
-   const params={conversation_id:'eq.'+id,select:'*',order:'created_at.asc,id.asc',limit:'1000'};
-   if(since>0){const cutoff=Math.max(0,Math.floor(since-15000));params.or='(created_at.gte.'+cutoff+',edited_at.gte.'+cutoff+',deleted_at.gte.'+cutoff+')'}
-   const messages=await db('message',params);
-   return reply({messages:messages.map(messageView),cursor:time(),initial:since===0});
+   if(!Number.isSafeInteger(since)||since<0)return reply({error:'Invalid cursor'},400);
+   if(url.searchParams.get('paging')!=='1'){
+    const params={conversation_id:'eq.'+id,select:'*',order:'created_at.asc,id.asc',limit:'1000'};
+    if(since>0){const cutoff=Math.max(0,Math.floor(since-15000));params.or='(created_at.gte.'+cutoff+',edited_at.gte.'+cutoff+',deleted_at.gte.'+cutoff+')'}
+    const messages=await db('message',params);
+    return reply({messages:messages.map(messageView),cursor:time(),initial:since===0});
+   }
+   let watermark=time(),last=null;
+   const page=url.searchParams.get('page');
+   if(page){
+    if(page.length>350)return reply({error:'Invalid page'},400);
+    try{
+     const p=JSON.parse(Buffer.from(page,'base64url').toString('utf8'));
+     if(p.v!==1||p.convo!==id||p.since!==since||!Number.isSafeInteger(p.watermark)||
+       p.watermark<0||p.watermark>time()+60000||!Number.isSafeInteger(p.created)||p.created<0||!uuid(p.id))throw Error('Invalid page');
+     watermark=p.watermark;last={created:p.created,id:p.id};
+    }catch{return reply({error:'Invalid page'},400)}
+   }
+   const pageSize=250,cutoff=Math.max(0,since-15000);
+   const params={conversation_id:'eq.'+id,select:'*',order:'created_at.asc,id.asc',limit:String(pageSize+1)};
+   const recent='or(created_at.gte.'+cutoff+',edited_at.gte.'+cutoff+',deleted_at.gte.'+cutoff+')';
+   const after=last?'or(created_at.gt.'+last.created+',and(created_at.eq.'+last.created+',id.gt.'+last.id+'))':null;
+   if(since>0&&after)params.and='('+recent+','+after+')';
+   else if(since>0)params.or='(created_at.gte.'+cutoff+',edited_at.gte.'+cutoff+',deleted_at.gte.'+cutoff+')';
+   else if(after)params.or='(created_at.gt.'+last.created+',and(created_at.eq.'+last.created+',id.gt.'+last.id+'))';
+   const all=await db('message',params),messages=all.slice(0,pageSize),hasMore=all.length>pageSize,lastRow=messages[messages.length-1];
+   const nextCursor=hasMore&&lastRow?Buffer.from(JSON.stringify({v:1,convo:id,since,watermark,created:Number(lastRow.created_at),id:lastRow.id})).toString('base64url'):null;
+   return reply({messages:messages.map(messageView),cursor:watermark,initial:since===0,hasMore,nextCursor});
   }
   if(action==='send'&&req.method==='POST'){
    if(!await activeConvo(body.convo))return reply({error:'Беседа не найдена'},404);
@@ -148,9 +172,11 @@ export default async function handler(req){
    const m=await one('message',body.id);
    if(!m||m.conversation_id!==body.convo||m.deleted_at||!await activeConvo(body.convo))return reply({error:'Сообщение не найдено'},404);
    if(m.author_id!==session.user.id)return reply({error:'Можно изменять только свои сообщения'},403);
-   const patch=action==='edit'?{body:clean(body.text,6000),edited_at:time()}:{deleted_at:time()};
+   const expected=m.edited_at===null?'is.null':'eq.'+String(m.edited_at);
+   const stamp=Math.max(time(),Number(m.edited_at||0)+1);
+   const patch=action==='edit'?{body:clean(body.text,6000),edited_at:stamp}:{deleted_at:stamp};
    if(action==='edit'&&!patch.body)return reply({error:'Сообщение не может быть пустым'},400);
-   const rows=await db('message',{id:'eq.'+body.id,author_id:'eq.'+session.user.id,deleted_at:'is.null'},{method:'PATCH',body:patch});
+   const rows=await db('message',{id:'eq.'+body.id,author_id:'eq.'+session.user.id,deleted_at:'is.null',edited_at:expected},{method:'PATCH',body:patch});
    if(!rows.length)return reply({error:'Сообщение уже изменено'},409);
    return reply({message:messageView(rows[0])});
   }
