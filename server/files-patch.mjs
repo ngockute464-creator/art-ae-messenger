@@ -11,7 +11,8 @@ const resizeClient=readFileSync('server/layout-resize.js','utf8');
 const uxClient=readFileSync('server/ux-client.js','utf8');
 const mentionsClient=readFileSync('server/file-mentions.js','utf8');
 const officeClient=readFileSync('server/office-client.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\nfunction cp(){','client and resize functions');
+const reliableSend=readFileSync('server/reliable-send.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -43,6 +44,7 @@ replace('${convoNav()}${view===',
 replace("<button type=\"button\" role=\"menuitem\" data-act=\"authUsers\">Пользователи</button>","<button type=\"button\" role=\"menuitem\" data-act=\"authUsers\">Пользователи</button><button type=\"button\" role=\"menuitem\" data-act=\"restoreProjects\">Восстановить проект</button>","admin restore menu");
 replace("<button type=\"submit\" class=\"btn primary\">Сохранить</button>","${modal.type==='editProject'&&window.ARTAE_AUTH?.getUser()?.role==='admin'?'<button type=\"button\" class=\"btn\" data-act=\"trashProject\" data-id=\"'+esc(modal.id)+'\">Удалить проект</button>':''}<button type=\"submit\" class=\"btn primary\">Сохранить</button>","project delete button");
 replace("if(action==='filesHome')openExplorer();","if(action==='trashProject')trashProject(id);else if(action==='restoreProjects')restoreProjectPicker();else if(action==='filesHome')openExplorer();","project archive handlers");
+replace("if(action==='trashProject')trashProject(id);","if(action==='retrySend'){retryOutgoing(id);return}else if(action==='trashProject')trashProject(id);",'retry outgoing action');
 
 replace("data.pins=preferences.pins||[];data.labels=preferences.labels||[];","data.pins=[];data.labels=preferences.labels||[];",'ux patch 1');
 replace("profile:data.profile,pins:data.pins,labels:data.labels","profile:data.profile,labels:data.labels",'ux patch 2');

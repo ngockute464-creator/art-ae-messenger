@@ -25,7 +25,7 @@ async function syncMessages(force=false){
   if(convo!==id)return;
   const oldSnapshot=JSON.stringify(data.messages.filter(m=>m.convo===id));
   const rows=new Map(data.messages.filter(m=>m.convo===id).map(m=>[m.id,m]));
-  if(first)for(const [key,value] of rows){if(!value.pending)rows.delete(key)}
+  if(first)for(const [key,value] of rows){if(!value.pending&&!value.sendFailed)rows.delete(key)}
   for(const m of all){if(m.deletedAt)rows.delete(m.id);else rows.set(m.id,m)}
   data.messages=data.messages.filter(m=>m.convo!==id).concat([...rows.values()]);
   lastMessageCursor[id]=finalCursor;
