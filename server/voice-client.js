@@ -118,8 +118,21 @@ async function voicePlay(id){
   }
   const objectURL=URL.createObjectURL(new Blob(chunks,{type:'audio/'+meta.format}));
   voiceAudioCache.set(id,objectURL);
+  // The initial click should start playback, not merely reveal a second Play button.
+  // Render first so the audio element exists, then try playback immediately.
+  voiceAudioLoading.delete(id);
+  render();
+  const player=[...document.querySelectorAll('.voiceMessage audio')].find(audio=>audio.getAttribute('src')===objectURL);
+  if(player){
+   try{await player.play()}catch(error){
+    // Safari can reject play() after asynchronous loading; retain native controls.
+    console.info('Voice playback requires user interaction',error?.name||error);
+   }
+  }
  }catch(error){console.warn('Voice playback',error);alert('Не удалось загрузить голосовое сообщение')}
- finally{voiceAudioLoading.delete(id);render()}
+ finally{
+  if(voiceAudioLoading.has(id)){voiceAudioLoading.delete(id);render()}
+ }
 }
 window.addEventListener('pagehide',()=>{
  if(voiceDraft?.preview)URL.revokeObjectURL(voiceDraft.preview);
