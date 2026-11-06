@@ -223,11 +223,6 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
       if(!commit.ok)throw Error(finalResult.error||'Не удалось завершить сохранение документа');
       result=finalResult;
       /* The commit endpoint is the only operation allowed to replace the original. */
-      if(false){
-      const versionResponse=await fetch('/.netlify/functions/files-explorer?'+new URLSearchParams({action:'officeVersion',project:projectId,path}),{credentials:'same-origin',cache:'no-store'});
-      try{result=await versionResponse.json()}catch{}
-      if(!versionResponse.ok)throw Error(result.error||'Не удалось подтвердить новую версию');
-      }
      }
      if(typeof result.modified!=='string'||!result.modified)throw Error('Сервер не подтвердил новую версию документа');
      ctx.version=result.modified;ok=true;state.textContent='Сохранено на Яндекс Диске';

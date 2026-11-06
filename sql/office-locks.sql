@@ -25,7 +25,7 @@ AS $$
 DECLARE l public.artae_office_locks%ROWTYPE; updated_count integer;
 BEGIN
  IF p_project IS NULL OR p_path IS NULL OR length(p_path)=0 OR length(p_path)>500
-  OR p_path NOT LIKE '%.docx' AND p_path NOT LIKE '%.xlsx'
+  OR lower(p_path) NOT LIKE '%.docx' AND lower(p_path) NOT LIKE '%.xlsx'
   OR p_token IS NULL OR p_user IS NULL THEN
   RAISE EXCEPTION 'Invalid lease request' USING ERRCODE='22023';
  END IF;
