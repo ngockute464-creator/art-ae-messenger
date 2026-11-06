@@ -1,15 +1,26 @@
 // ART-AE Cloudflare transcription: client decodes original audio and sends
 // independently decodable PCM/WAV segments, never arbitrary WebM byte slices.
 const voiceTranscriptCache=new Map(),voiceTranscriptBusy=new Map(),voiceTranscriptErrors=new Map();
-function voiceTranscriptControls(m){
+const voiceTranscriptProgress=new Map();
+function voiceTranscriptButton(m){
+ const meta=voiceParse(m.text);
+ if(!meta)return '';
+ if(voiceTranscriptCache.has(meta.id))return '';
+ const busy=voiceTranscriptBusy.get(meta.id);
+ if(busy){
+  const progress=voiceTranscriptProgress.get(meta.id);
+  const value=progress==null?'':' value="'+Math.max(0,Math.min(100,Math.round(progress)))+'"';
+  return '<progress class="voiceTranscriptProgress" max="100"'+value+' aria-label="'+esc(busy)+'" title="'+esc(busy)+'"></progress>';
+ }
+ return '<button type="button" class="btn small voiceTranscriptTrigger" data-act="voiceTranscribe" data-id="'+meta.id+'">Расшифровать</button>';
+}
+function voiceTranscriptResult(m){
  const meta=voiceParse(m.text);
  if(!meta)return '';
  const text=voiceTranscriptCache.get(meta.id);
  if(text!==undefined)return '<div class="voiceTranscriptText">'+(text?esc(text):'Речь не распознана')+'</div>'+(text?'<button class="btn small voiceTranscriptCopy" type="button" data-act="voiceTranscriptCopy" data-id="'+meta.id+'">Скопировать текст</button>':'');
- const state=voiceTranscriptBusy.get(meta.id);
- const label=state||'Расшифровать';
  const error=voiceTranscriptErrors.get(meta.id);
- return '<div class="voiceTranscriptActions"><button type="button" class="btn small" data-act="voiceTranscribe" data-id="'+meta.id+'" '+(state?'disabled':'')+'>'+label+'</button>'+(error?'<span class="voiceTranscriptError">'+esc(error)+'</span>':'')+'</div>';
+ return error?'<div class="voiceTranscriptError" role="status">'+esc(error)+'</div>':'';
 }
 function voiceTranscriptUrl(action,m,extra={}){
  return '/.netlify/functions/voice-transcript?'+new URLSearchParams({action,convo:m.convo,id:m.id,...extra});
@@ -63,11 +74,11 @@ function voiceWavSegment(buffer,startFrame,frameCount){
 async function voiceTranscribe(id){
  const m=data.messages.find(x=>x.id===id),meta=voiceParse(m?.text);
  if(!m||!meta||voiceTranscriptBusy.has(id))return;
- voiceTranscriptBusy.set(id,'Проверяем…');voiceTranscriptErrors.delete(id);render();
+ voiceTranscriptBusy.set(id,'Проверяем…');voiceTranscriptProgress.set(id,null);voiceTranscriptErrors.delete(id);render();
  try{
   if(await voiceReadTranscriptStatus(m))return;
   if(!window.AudioContext&&!window.webkitAudioContext)throw Error('Браузер не поддерживает обработку аудио');
-  voiceTranscriptBusy.set(id,'Подготавливаем аудио…');render();
+  voiceTranscriptBusy.set(id,'Подготавливаем аудио…');voiceTranscriptProgress.set(id,null);render();
   const original=await voiceDownloadForTranscription(m,meta);
   const encoded=await original.arrayBuffer();
   const AudioConstructor=window.AudioContext||window.webkitAudioContext;
@@ -79,15 +90,16 @@ async function voiceTranscribe(id){
   const secondsPerChunk=20,framesPerChunk=secondsPerChunk*buffer.sampleRate;
   const total=Math.ceil(buffer.length/framesPerChunk);
   for(let part=0;part<total;part++){
-   voiceTranscriptBusy.set(id,'Расшифровка '+(part+1)+' / '+total);render();
+   voiceTranscriptBusy.set(id,'Расшифровка '+(part+1)+' / '+total);voiceTranscriptProgress.set(id,100*part/total);render();
    const start=part*framesPerChunk,frames=Math.min(framesPerChunk,buffer.length-start);
    const wav=voiceWavSegment(buffer,start,frames);
    const response=await fetch(voiceTranscriptUrl('chunk',m,{part:String(part),total:String(total)}),{
     method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'audio/wav'},body:wav});
    let result={};try{result=await response.json()}catch{}
    if(!response.ok)throw Error(result.error||'Ошибка Whisper, фрагмент '+(part+1));
+   voiceTranscriptProgress.set(id,100*(part+1)/total);render();
   }
-  voiceTranscriptBusy.set(id,'Сохраняем текст…');render();
+  voiceTranscriptBusy.set(id,'Сохраняем текст…');voiceTranscriptProgress.set(id,100);render();
   const response=await fetch(voiceTranscriptUrl('finish',m,{total:String(total)}),{
    method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:'{}'});
   let result={};try{result=await response.json()}catch{}
@@ -96,7 +108,7 @@ async function voiceTranscribe(id){
  }catch(error){
   console.warn('ARTAE transcript',error);
   voiceTranscriptErrors.set(id,String(error?.message||error).slice(0,180));
- }finally{voiceTranscriptBusy.delete(id);render()}
+ }finally{voiceTranscriptBusy.delete(id);voiceTranscriptProgress.delete(id);render()}
 }
 async function voiceTranscriptCopy(id){
  const text=voiceTranscriptCache.get(id);

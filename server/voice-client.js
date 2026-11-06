@@ -1,7 +1,7 @@
 // ART-AE voice messages: browser MediaRecorder, preview, private chunk upload, playback.
 // No browser persistence of private audio and no automatic transcription.
 let voiceDraft=null;
-const voiceAudioCache=new Map(),voiceAudioLoading=new Set();
+const voiceAudioCache=new Map(),voiceAudioLoading=new Set(),voicePlayers=new Map();
 function voiceParse(text){
  const match=typeof text==='string'&&text.match(/^\[\[voice:v1:([a-f0-9-]{36}):([1-9]\d{0,5}):(webm|mp4):(\d{1,9})\]\]$/i);
  if(!match)return null;
@@ -27,8 +27,13 @@ function voicePanel(){
 function voiceMessageHtml(message){
  const meta=voiceParse(message.text);
  if(!meta)return linkify(message.text||'');
- const url=voiceAudioCache.get(meta.id);
- return '<div class="voiceMessage"><span>🎙 Голосовое · '+voiceDuration(meta.seconds)+'</span>'+(url?'<audio controls preload="metadata" src="'+esc(url)+'" aria-label="Воспроизвести голосовое сообщение"></audio>':'<button class="btn small" type="button" data-act="voicePlay" data-id="'+meta.id+'" '+(voiceAudioLoading.has(meta.id)?'disabled':'')+'>'+(voiceAudioLoading.has(meta.id)?'Загрузка…':'▶ Слушать')+'</button>')+voiceTranscriptControls(message)+'</div>';
+ const player=voicePlayers.get(meta.id);
+ const playing=!!player&&!player.paused&&!player.ended;
+ const loading=voiceAudioLoading.has(meta.id);
+ const symbol=loading?'…':playing?'Ⅱ':'▶';
+ const playLabel=loading?'Загружается аудио':playing?'Приостановить воспроизведение':'Воспроизвести голосовое сообщение';
+ const play='<button type="button" class="voicePlayIcon" data-act="voicePlay" data-id="'+meta.id+'" title="'+playLabel+'" aria-label="'+playLabel+'" aria-pressed="'+(playing?'true':'false')+'" '+(loading?'disabled':'')+'>'+symbol+'</button>';
+ return '<div class="voiceMessage"><div class="voiceMessageRow"><span class="voiceSpeaker" aria-hidden="true">🔊</span><span class="voiceTime">'+voiceDuration(meta.seconds)+'</span>'+play+voiceTranscriptButton(message)+'</div>'+voiceTranscriptResult(message)+'</div>';
 }
 async function voiceStart(){
  if(voiceDraft){alert('Сначала завершите или отмените текущую запись.');return}
@@ -105,36 +110,51 @@ async function voiceSend(){
 async function voicePlay(id){
  const message=data.messages.find(m=>m.id===id);
  const meta=voiceParse(message?.text);
- if(!meta||voiceAudioLoading.has(meta.id))return;
- if(voiceAudioCache.has(meta.id)){render();return}
+ if(!meta||voiceAudioLoading.has(id))return;
+ // Keep the audio element outside the rendered chat DOM so message refreshes
+ // and transcription progress updates do not interrupt playback.
+ const existing=voicePlayers.get(id);
+ if(existing){
+  if(!existing.paused&&!existing.ended){existing.pause();return}
+  if(existing.ended)existing.currentTime=0;
+  try{await existing.play()}catch(e){console.info('Browser blocked audio playback',e?.name||e)}
+  return;
+ }
  voiceAudioLoading.add(id);render();
  try{
-  const chunks=[];
-  for(let i=0;i<meta.parts;i++){
-   const url='/.netlify/functions/voice?'+new URLSearchParams({action:'part',convo:message.convo,id:meta.id,part:String(i)});
-   const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
-   if(!response.ok)throw Error('Фрагмент '+(i+1)+' недоступен');
-   chunks.push(await response.blob());
+  let objectURL=voiceAudioCache.get(id);
+  if(!objectURL){
+   const chunks=[];
+   for(let i=0;i<meta.parts;i++){
+    const url='/.netlify/functions/voice?'+new URLSearchParams({action:'part',convo:message.convo,id:meta.id,part:String(i)});
+    const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+    if(!response.ok)throw Error('Фрагмент '+(i+1)+' недоступен');
+    chunks.push(await response.blob());
+   }
+   objectURL=URL.createObjectURL(new Blob(chunks,{type:'audio/'+meta.format}));
+   voiceAudioCache.set(id,objectURL);
   }
-  const objectURL=URL.createObjectURL(new Blob(chunks,{type:'audio/'+meta.format}));
-  voiceAudioCache.set(id,objectURL);
-  // The initial click should start playback, not merely reveal a second Play button.
-  // Render first so the audio element exists, then try playback immediately.
+  const player=new Audio(objectURL);
+  player.preload='auto';
+  player.onplay=()=>render();
+  player.onpause=()=>render();
+  player.onended=()=>render();
+  voicePlayers.set(id,player);
   voiceAudioLoading.delete(id);
   render();
-  const player=[...document.querySelectorAll('.voiceMessage audio')].find(audio=>audio.getAttribute('src')===objectURL);
-  if(player){
-   try{await player.play()}catch(error){
-    // Safari can reject play() after asynchronous loading; retain native controls.
-    console.info('Voice playback requires user interaction',error?.name||error);
-   }
+  try{await player.play()}catch(error){
+   console.info('Voice playback requires user interaction',error?.name||error);
   }
- }catch(error){console.warn('Voice playback',error);alert('Не удалось загрузить голосовое сообщение')}
- finally{
+ }catch(error){
+  console.warn('Voice playback',error);
+  alert('Не удалось загрузить голосовое сообщение');
+ }finally{
   if(voiceAudioLoading.has(id)){voiceAudioLoading.delete(id);render()}
  }
 }
 window.addEventListener('pagehide',()=>{
+ for(const player of voicePlayers.values()){player.pause();player.src=''}
+ voicePlayers.clear();
  if(voiceDraft?.preview)URL.revokeObjectURL(voiceDraft.preview);
  for(const url of voiceAudioCache.values())URL.revokeObjectURL(url);
  voiceAudioCache.clear();
