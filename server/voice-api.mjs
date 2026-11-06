@@ -90,6 +90,10 @@ export default async function handler(request){
    if(!['webm','mp4'].includes(format))return json({error:'Недопустимый формат аудио'},400);
    if(!/^audio\/(webm|mp4)(?:;.*)?$/i.test(request.headers.get('content-type')||''))return json({error:'Неверный тип данных'},415);
    const bytes=await readBounded(request.body);
+   // A completed message is immutable: never overwrite its audio parts.
+   // A duplicate upload acknowledgement is safe to return without writing.
+   const existing=await database('artae_messages',{id:'eq.'+id,select:'id',limit:'1'});
+   if(existing.length)return json({ok:true,part:index,alreadySent:true});
    for(const folder of [root+'/_artae_voice',root+'/_artae_voice/'+convo,directory])
     await disk('PUT','/resources',{path:folder});
    const target=directory+'/'+index+'.'+format;

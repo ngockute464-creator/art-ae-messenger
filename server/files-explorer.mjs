@@ -77,7 +77,7 @@ function itemView(i,parent){
 }
 
 function fileName(x){
- if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
+ if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||x.toLowerCase()==='_artae_voice'||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
  return x;
 }
 function transferUrl(href){
