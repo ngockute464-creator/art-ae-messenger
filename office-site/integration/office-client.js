@@ -1,0 +1,221 @@
+// Open authenticated ART-AE project documents inside our self-hosted VibeOffice.
+// Downloading a changed copy is handled by VibeOffice's built-in File > Save.
+(() => {
+'use strict';
+// Keep the copy-only editor handler unique even if a cached HTML shell loads
+// the legacy standalone script alongside the versioned app.js.
+if(window.__ARTAE_OFFICE_READY__)return;
+window.__ARTAE_OFFICE_READY__=true;
+let active=null;
+let warmDocx=null;
+let warmXlsx=null;
+const officeOrigin=window.ARTAE_OFFICE_ORIGIN||null;
+function requireOfficeOrigin(){
+ if(!officeOrigin)throw Error('Отдельный Office-сайт не настроен');
+ const u=new URL(officeOrigin);
+ if(u.protocol!=='https:'||u.origin!==officeOrigin||u.origin===location.origin)
+  throw Error('Небезопасный адрес Office');
+ return u.origin;
+}
+function makeOfficeFrame(kind,name){
+ const frame=document.createElement('iframe');
+ frame.className='artaeOfficeFrame';
+ frame.title='VibeOffice — '+name;
+ frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads allow-modals');
+ frame.src=requireOfficeOrigin()+'/'+kind+'/';
+ return frame;
+}
+// Starts the DOCX engine after the user has opened an authenticated project's files.
+// The iframe is kept mounted until the document opens; no file data is preloaded.
+function prewarmOfficeDocx(){
+ if(warmDocx||active||!officeOrigin)return;
+ const frame=makeOfficeFrame('quire','предварительная загрузка DOCX');
+ const host=document.createElement('div');
+ host.className='artaeOfficeWarmHost';
+ host.append(frame);
+ const ctx={host,frame,ready:false,started:performance.now()};
+ warmDocx=ctx;
+ ctx.listener=event=>{
+  if(warmDocx!==ctx||event.origin!==officeOrigin||event.source!==frame.contentWindow)return;
+  if(event.data?.type==='artae-office-ready'){
+   ctx.ready=true;
+   console.info('[ART-AE Office] DOCX prewarmed in '+Math.round(performance.now()-ctx.started)+' ms');
+  }
+ };
+ window.addEventListener('message',ctx.listener);
+ document.body.append(host);
+}
+// Ledger is prepared after file-list rendering. Keep it mounted so opening it
+// does not reset the iframe. Never prefetch project files or credentials.
+function prewarmOfficeXlsx(){
+ if(warmXlsx||active||!officeOrigin)return;
+ const frame=makeOfficeFrame('ledger','предварительная загрузка XLSX');
+ const host=document.createElement('div');host.className='artaeOfficeWarmHost';host.append(frame);
+ const ctx={host,frame,ready:false,started:performance.now()};warmXlsx=ctx;
+ ctx.listener=event=>{
+  if(warmXlsx!==ctx||event.origin!==officeOrigin||event.source!==frame.contentWindow)return;
+  if(event.data?.type==='artae-office-ready'){
+   ctx.ready=true;
+   console.info('[ART-AE Office] XLSX prewarmed in '+Math.round(performance.now()-ctx.started)+' ms');
+  }
+ };
+ window.addEventListener('message',ctx.listener);document.body.append(host);
+}
+window.ARTAE_OFFICE_PREWARM_XLSX=prewarmOfficeXlsx;
+// Expose only the optional warm-up function to the file browser.
+window.ARTAE_OFFICE_PREWARM=prewarmOfficeDocx;
+
+function close(){
+ const a=active;if(!a)return;active=null;
+ window.removeEventListener('message',a.message);
+ if(a.pdfUrl){URL.revokeObjectURL(a.pdfUrl);a.pdfUrl=null}
+ a.overlay.remove();
+ if(a.kind==='ledger')setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},800);
+}
+function finishDocxClose(ctx){
+ if(active!==ctx)return;
+ active=null;
+ window.removeEventListener('message',ctx.message);
+ if(ctx.pdfUrl){URL.revokeObjectURL(ctx.pdfUrl);ctx.pdfUrl=null}
+ const host=ctx.overlay;
+ host.querySelectorAll('.artaePdfViewer,.artaePdfFallback').forEach(el=>el.remove());
+ ctx.frame.style.display='';
+ // The iframe never leaves its DOM parent; closing Quire resets to a fresh
+ // blank document before we hide it. Keep the ready engine for the next DOCX.
+ const header=host.querySelector('.artaeOfficeTop');
+ if(header)header.remove();
+ host.classList.remove('artaeOfficeWarmActive');
+ host.classList.add('artaeOfficeWarmHost');
+ const warm={host,frame:ctx.frame,ready:true,started:performance.now()};
+ warm.listener=event=>{
+  if(warmDocx!==warm||event.origin!==officeOrigin||event.source!==warm.frame.contentWindow)return;
+  if(event.data?.type==='artae-office-ready')warm.ready=true;
+ };
+ warmDocx=warm;
+ window.addEventListener('message',warm.listener);
+ console.info('[ART-AE Office] DOCX reset completed; ready instance retained');
+ if(!warmXlsx)setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},1000);
+}
+async function openProjectDocument(path,name,projectId,localFile=null,mode='edit'){
+ if(active)return;
+ try{requireOfficeOrigin()}catch(error){alert(error.message);return}
+ if(!/\.(docx|xlsx)$/i.test(name))return;
+ if(!localFile&&!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
+ let overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
+ const box=document.createElement('section');box.className='artaeOfficePanel';
+ box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label',(mode==='preview'?'Просмотр ':'Редактирование ')+name);
+ const top=document.createElement('header');top.className='artaeOfficeTop';
+ const title=document.createElement('strong');title.textContent=name;
+ const state=document.createElement('span');state.className='artaeOfficeState';state.textContent=localFile?'Читаем локальный файл…':'Загрузка файла…';
+ const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent=mode==='preview'?'PDF-просмотр':'Сохранение → скачивание копии';
+ const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
+ closeButton.addEventListener('click',()=>{
+  if(kind==='quire'){
+   if(!active||active.closing)return;
+   active.closing=true;
+   closeButton.disabled=true;
+   state.textContent='Проверка несохранённых изменений…';
+   active.frame.contentWindow.postMessage({type:'artae-office-close'},officeOrigin);
+   active.closeTimer=setTimeout(()=>{
+    if(active&&active.closing){active.closing=false;closeButton.disabled=false;state.textContent='Не удалось закрыть документ. Повторите попытку.'}
+   },30000);
+  }else if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close();
+ });
+ top.append(title,state,hint,closeButton);
+ const kind=/\.docx$/i.test(name)?'quire':'ledger';
+ if(kind==='quire'&&!warmDocx)prewarmOfficeDocx();
+ if(kind==='ledger'&&!warmXlsx)prewarmOfficeXlsx();
+ const warm=kind==='quire'?warmDocx:warmXlsx;
+ const warmInfo=warm?(warm.ready?'готов до клика':'запущен, но не готов'):'не запускался';
+ const warmAge=warm?Math.round(performance.now()-warm.started):0;
+ console.info('[ART-AE Office] warmup at click:',{kind,warmInfo,warmAgeMs:warmAge});
+ if(warm){
+  window.removeEventListener('message',warm.listener);
+  if(kind==='quire')warmDocx=null;else warmXlsx=null;
+ }
+ const frame=warm?.frame||makeOfficeFrame(kind,name);
+ frame.title='VibeOffice — '+name;
+ if(warm){
+  // Reparenting an iframe can destroy its browsing context and start it again.
+  // Keep the already-running frame in its original container.
+  overlay=warm.host;
+  overlay.classList.add('artaeOfficeWarmActive');
+  overlay.insertBefore(top,frame);
+ }else{
+  box.append(top,frame);
+  overlay.append(box);
+ }
+ const started=performance.now();
+ const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null};active=ctx;
+ const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer},officeOrigin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
+ ctx.message=event=>{
+  if(active!==ctx||event.origin!==officeOrigin||event.source!==frame.contentWindow)return;
+  const msg=event.data;if(!msg||typeof msg.type!=='string')return;
+  if(msg.type==='artae-office-ready'){
+   ctx.ready=true;ctx.readyAt=performance.now();
+   console.info('[ART-AE Office] iframe ready after click',Math.round(ctx.readyAt-ctx.started),'ms');
+   send();
+  }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · файл '+(fileReady/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');if(ctx.mode==='preview'){state.textContent='Создаём PDF…';frame.contentWindow.postMessage({type:'artae-office-export-pdf'},officeOrigin)}console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
+  else if(msg.type==='artae-office-pdf'&&ctx.mode==='preview'){
+   if(!(msg.blob instanceof Blob)||msg.blob.type!=='application/pdf')return;
+   ctx.pdfUrl=URL.createObjectURL(msg.blob);
+   frame.style.display='none';
+   const viewer=document.createElement('iframe');viewer.className='artaePdfViewer';
+   viewer.title='PDF — '+name;viewer.src=ctx.pdfUrl;viewer.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads');
+   const link=document.createElement('a');link.className='artaePdfFallback';link.href=ctx.pdfUrl;link.target='_blank';link.rel='noopener';link.textContent='Открыть PDF в новой вкладке';
+   frame.parentElement.append(viewer,link);state.textContent='Просмотр PDF';
+  }
+  else if(msg.type==='artae-office-close-result'){
+   clearTimeout(ctx.closeTimer);ctx.closeTimer=null;ctx.closing=false;closeButton.disabled=false;
+   if(msg.closed)finishDocxClose(ctx);
+   else state.textContent=msg.error?'Ошибка закрытия: '+String(msg.error).slice(0,140):'Закрытие отменено';
+  }
+  else if(msg.type==='artae-office-error')state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
+ };
+ window.addEventListener('message',ctx.message);
+ if(!warm)document.body.append(overlay);
+ if(ctx.prewarmed)console.info('[ART-AE Office] Reusing ready '+kind+' editor');
+ try{
+  // Existing session-protected files API; no credentials given to the editor.
+  let blob=localFile;
+  if(!blob){
+   const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project:projectId,path});
+   const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+   if(!response.ok){let details={};try{details=await response.json()}catch{}
+    throw Error(details.error||'Не удалось получить документ: HTTP '+response.status)}
+   blob=await response.blob();
+  }
+  if(blob.size>3*1024*1024)throw Error('Файл превышает лимит теста 3 МБ');
+  if(active!==ctx)return;
+  ctx.buffer=await blob.arrayBuffer();
+  ctx.fileAt=performance.now();
+  send();
+ }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
+}
+document.addEventListener('click',event=>{
+ const button=event.target.closest('[data-act="officeEdit"],[data-act="filesPreview"]');if(!button)return;
+ const preview=button.dataset.act==='filesPreview';
+ if(preview&&!/\.(docx|xlsx)$/i.test(button.dataset.name||''))return;
+ event.preventDefault();event.stopImmediatePropagation();
+ openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||project,null,preview?'preview':'edit')
+  .catch(error=>alert('Не удалось открыть редактор: '+String(error?.message||error)));
+},true);
+const css=document.createElement('style');css.textContent=`
+.artaePdfViewer{flex:1;width:100%;height:100%;border:0;min-height:0}
+.artaePdfFallback{font:13px sans-serif;padding:5px 12px}
+.artaeOfficeWarmHost{position:fixed;left:0;top:0;width:min(1100px,100vw);height:80vh;opacity:0;pointer-events:none;z-index:-1;overflow:hidden}
+.artaeOfficeWarmHost iframe{width:100%;height:100%;border:0}
+.artaeOfficeWarmHost.artaeOfficeWarmActive{inset:0;width:100%;height:100dvh;opacity:1;pointer-events:auto;z-index:100001;display:flex;flex-direction:column;background:var(--surface,#fff)}
+.artaeOfficeWarmActive iframe{flex:1;min-height:0;width:100%;height:auto}
+.artaeOfficeOverlay{position:fixed;inset:0;z-index:100001;background:var(--surface,#fff);display:flex}
+.artaeOfficePanel{display:flex;flex-direction:column;min-width:0;width:100%;height:100dvh}
+.artaeOfficeTop{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid #dde3eb;min-height:52px;font:13px system-ui}
+.artaeOfficeTop strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.artaeOfficeState{color:#52718b;font-size:12px;flex:1}
+.artaeOfficeHint{font-size:12px;color:#66778a}
+.artaeOfficeClose{border:1px solid #d5dce8;border-radius:8px;background:transparent;padding:9px 12px;color:inherit;cursor:pointer}
+.artaeOfficeFrame{flex:1;min-height:0;width:100%;border:0;background:#fff}
+@media(max-width:650px){.artaeOfficeTop{gap:7px;flex-wrap:wrap;padding:6px 9px}.artaeOfficeTop strong{flex-basis:40%}.artaeOfficeHint{display:none}}
+`;
+document.head.append(css);
+})();

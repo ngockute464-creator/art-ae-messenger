@@ -1,0 +1,11 @@
+# Netlify NEW site: package directory "office-site"; base stays repository root.
+[build]
+  command = "node office-site/build.mjs"
+  publish = "office-site/dist"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    X-Robots-Tag = "noindex"
