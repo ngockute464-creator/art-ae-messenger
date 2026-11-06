@@ -268,6 +268,14 @@ function explorerZoomableImage(media,body,bar){
 }
 
 async function explorerPreview(path,name,mime){
+ if(/\.(docx|xlsx)$/i.test(name)){
+  if(typeof window.ARTAE_OFFICE_PREVIEW!=='function'){
+   alert('Office-просмотр не загрузился. Обновите страницу и попробуйте снова.');
+   return;
+  }
+  try{return await window.ARTAE_OFFICE_PREVIEW(path,name,explorer.project||project)}
+  catch(error){console.error('Office preview',error);alert('Не удалось открыть просмотр: '+String(error?.message||error))}
+ }
  const kind=explorerKind(name,mime);
  if(kind==='unknown')return alert('Предпросмотр этого формата пока не поддерживается. Используйте «Скачать».');
  const dialog=document.createElement('dialog');

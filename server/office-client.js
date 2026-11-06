@@ -89,7 +89,10 @@ function finishDocxClose(ctx){
  if(!warmXlsx)setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},1000);
 }
 async function openProjectDocument(path,name,projectId,localFile=null,mode='edit'){
- if(active)return;
+ if(active){
+  alert('Сначала закройте открытый документ, затем повторите просмотр.');
+  return;
+ }
  if(!/\.(docx|xlsx)$/i.test(name))return;
  if(!localFile&&!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
  let overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
@@ -192,10 +195,11 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   send();
  }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
 }
+window.ARTAE_OFFICE_PREVIEW=(path,name,projectId)=>openProjectDocument(path,name,projectId,null,'preview');
+// Central file explorer routes preview actions; only edit uses capture here.
 document.addEventListener('click',event=>{
- const button=event.target.closest('[data-act="officeEdit"],[data-act="filesPreview"]');if(!button)return;
- const preview=button.dataset.act==='filesPreview';
- if(preview&&!/\.(docx|xlsx)$/i.test(button.dataset.name||''))return;
+ const button=event.target.closest('[data-act="officeEdit"]');if(!button)return;
+ const preview=false;
  event.preventDefault();event.stopImmediatePropagation();
  openProjectDocument(button.dataset.path||'',button.dataset.name||'',button.dataset.project||project,null,preview?'preview':'edit')
   .catch(error=>alert('Не удалось открыть редактор: '+String(error?.message||error)));
