@@ -43,6 +43,11 @@ addEventListener('message',async event=>{
   return;
  }
 
+ if(msg.type==='artae-office-save-command'){
+  try{if(!ready()||typeof window.L.app.save!=='function')throw Error('Сохранение недоступно');await window.L.app.save()}
+  catch(error){window.parent.postMessage({type:'artae-office-error',message:String(error?.message||error)},origin)}
+  return;
+ }
  if(msg.type==='artae-office-close'){
   try{
    if(document.documentElement.dataset.app!=='quire'||!ready()||typeof window.L.app.closeDocument!=='function')

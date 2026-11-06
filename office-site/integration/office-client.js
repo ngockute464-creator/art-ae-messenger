@@ -111,8 +111,14 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
  const title=document.createElement('strong');title.textContent=name;
  const state=document.createElement('span');state.className='artaeOfficeState';state.textContent=localFile?'Читаем локальный файл…':'Загрузка файла…';
  const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent=mode==='preview'?'PDF-просмотр':localFile?'Локальная копия':'Сохранение → Яндекс Диск';
+ const saveButton=document.createElement('button');saveButton.type='button';saveButton.textContent='Сохранить';saveButton.className='artaeOfficeSave';saveButton.hidden=mode!=='edit'||!!localFile;
+ saveButton.addEventListener('click',()=>{
+  if(!active||active.saving)return;
+  active.frame.contentWindow.postMessage({type:'artae-office-save-command'},officeOrigin);
+ });
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
  closeButton.addEventListener('click',()=>{
+  if(active?.saving){state.textContent='Сохранение выполняется. Закройте после завершения.';return;}
   if(kind==='quire'){
    if(!active||active.closing)return;
    active.closing=true;
@@ -124,7 +130,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    },30000);
   }else if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close();
  });
- top.append(title,state,hint,closeButton);
+ top.append(title,state,hint,saveButton,closeButton);
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
  if(kind==='quire'&&!warmDocx)prewarmOfficeDocx();
  if(kind==='ledger'&&!warmXlsx)prewarmOfficeXlsx();
@@ -255,6 +261,7 @@ const css=document.createElement('style');css.textContent=`
 .artaeOfficeTop strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
 .artaeOfficeState{color:#52718b;font-size:12px;flex:1}
 .artaeOfficeHint{font-size:12px;color:#66778a}
+.artaeOfficeSave{border:1px solid #2869dc;border-radius:8px;background:#2869dc;color:white;padding:9px 12px;cursor:pointer;font:inherit}.artaeOfficeSave[hidden]{display:none}
 .artaeOfficeClose{border:1px solid #d5dce8;border-radius:8px;background:transparent;padding:9px 12px;color:inherit;cursor:pointer}
 .artaeOfficeFrame{flex:1;min-height:0;width:100%;border:0;background:#fff}
 @media(max-width:650px){.artaeOfficeTop{gap:7px;flex-wrap:wrap;padding:6px 9px}.artaeOfficeTop strong{flex-basis:40%}.artaeOfficeHint{display:none}}
