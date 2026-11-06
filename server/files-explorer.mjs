@@ -264,16 +264,17 @@ export default async function handler(request){
     throw Object.assign(Error('Не найден подготовленный документ'),{status:400});
    const operation=await disk('POST','/resources/move',{from:stage,path:final,overwrite:'true'});
    // Yandex may schedule moving large files as an asynchronous operation.
-   if(operation?.href&&operation?.method){
+   if(operation?.href){
     const opUrl=transferUrl(operation.href);
-    for(let attempt=0;attempt<10;attempt++){
-     const progress=await transferFetch(opUrl.toString());
-     if(!progress.ok)throw Object.assign(Error('Операция сохранения на Яндекс Диске завершилась ошибкой'),{status:502});
-     const result=await progress.json();
-     if(result.status==='success')break;
-     if(result.status==='failed')throw Object.assign(Error('Не удалось заменить документ на Яндекс Диске'),{status:502});
-     if(attempt===9)throw Object.assign(Error('Сохранение ещё выполняется. Не закрывайте документ.'),{status:503});
-     await new Promise(done=>setTimeout(done,700));
+    const match=opUrl.pathname.match(/^\/v1\/disk\/operations\/([a-zA-Z0-9_-]+)$/);
+    if(!match)throw Object.assign(Error('Некорректная операция Яндекс Диска'),{status:502});
+    for(let attempt=0;attempt<12;attempt++){
+     // Operation status is a protected Disk API endpoint, not a public transfer URL.
+     const status=await disk('GET','/operations/'+match[1]);
+     if(status?.status==='success')break;
+     if(status?.status==='failed')throw Object.assign(Error('Не удалось заменить документ на Яндекс Диске'),{status:502});
+     if(attempt===11)throw Object.assign(Error('Сохранение ещё выполняется. Не закрывайте документ.'),{status:503});
+     await new Promise(done=>setTimeout(done,500));
     }
    }
    const updated=await disk('GET','/resources',{path:final,fields:'type,modified,size'});
