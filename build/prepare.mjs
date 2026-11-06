@@ -3,6 +3,7 @@ import {copyFileSync,readFileSync,writeFileSync} from 'node:fs';
 copyFileSync('server/sync-pg.mjs','netlify/functions/sync.mjs');
 copyFileSync('server/project-rename.mjs','netlify/functions/project-rename.mjs');
 copyFileSync('server/files-explorer.mjs','netlify/functions/files-explorer.mjs');
+copyFileSync('server/voice-api.mjs','netlify/functions/voice.mjs');
 copyFileSync('server/pins-api.mjs','netlify/functions/pins.mjs');
 copyFileSync('server/realtime-token.mjs','netlify/functions/realtime-token.mjs');
 copyFileSync('server/jwt-standby-probe.mjs','netlify/functions/jwt-standby-probe.mjs');

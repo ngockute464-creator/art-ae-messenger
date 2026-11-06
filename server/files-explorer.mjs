@@ -25,6 +25,7 @@ const forbidden=x=>/[\x00-\x1f\\]/.test(x)||x==='.'||x==='..'||x==='__proto__';
 const relative=x=>{
  if(typeof x!=='string'||x.length>500||x.startsWith('/')||x.endsWith('/')||x.includes('//'))throw Object.assign(Error('Некорректный путь'),{status:400});
  if(x==='')return '';
+ if(x.split('/').includes('_artae_voice'))throw Object.assign(Error('Служебная папка'),{status:403});
  const parts=x.split('/');
  if(parts.length>12||parts.some(p=>!p||p.length>120||forbidden(p)))throw Object.assign(Error('Недопустимый путь'),{status:400});
  return parts.join('/');
@@ -32,7 +33,7 @@ const relative=x=>{
 function folderName(x){
  if(typeof x!=='string')throw Object.assign(Error('Недопустимое имя'),{status:400});
  const s=x.trim();
- if(!s||s.length>100||/[\\/:*?"<>|\x00-\x1f]/.test(s)||s==='.'||s==='..'||s==='_system'||s.endsWith('.'))throw Object.assign(Error('Недопустимое имя папки'),{status:400});
+ if(!s||s.length>100||/[\\/:*?"<>|\x00-\x1f]/.test(s)||s==='.'||s==='..'||(s==='_system'||s==='_artae_voice')||s.endsWith('.'))throw Object.assign(Error('Недопустимое имя папки'),{status:400});
  return s;
 }
 function authEnv(){
@@ -67,7 +68,7 @@ function itemView(i,parent){
  // Resource paths returned by Yandex Disk may use a canonical namespace
  // rather than the app:/ alias used to make the request. Never compare them.
  // Build paths only from the current validated parent and safe direct-child name.
- if(!i||typeof i.name!=='string'||!i.name||i.name.length>255||
+ if(!i||typeof i.name!=='string'||!i.name||i.name==='_artae_voice'||i.name.length>255||
     i.name==='.'||i.name==='..'||/[\\/\x00-\x1f]/.test(i.name)||
     (i.type!=='dir'&&i.type!=='file'))return null;
  const relativePath=parent?parent+'/'+i.name:i.name;
