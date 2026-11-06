@@ -18,7 +18,7 @@ async function db(table,params={},method='GET',body){
  const r=await fetch(u,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(12000)});
  if(!r.ok){const raw=await r.text();let e={};try{e=JSON.parse(raw)}catch{}
   if(e.code==='42P01'||e.code==='PGRST205')throw failure('Таблица закреплений пока не создана в Supabase',503);
-  const err=failure(e.message||'Ошибка PostgreSQL',r.status);err.code=e.code;throw err}
+  const err=failure(e.message||'Ошибка PostgreSQL',r.status);err.code=e.code;err.internalDb=true;throw err}
  return r.status===204?[]:r.json();
 }
 async function activeProject(id){
@@ -113,6 +113,7 @@ export default async function handler(req){
   }catch(e){if(e.code!=='23505')throw e}
   return reply({ok:true,pinned:true});
  }catch(e){
+  if(e.internalDb){console.error('ARTAE pins DB',e.status,e.code);return reply({error:'Ошибка хранилища закреплений'},502)}
   if(e.status&&e.status!==502&&e.status<600)return reply({error:e.message},e.status);
   console.error('ARTAE pins',e.message);
   return reply({error:'Не удалось загрузить закрепления'},502);

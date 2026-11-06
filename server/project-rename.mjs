@@ -58,12 +58,25 @@ export async function renameProjectFolder({oldProject,name,db,avatarProvided=fal
   if(rows.length!==1)throw err('Проект изменился во время переименования',409);
   return rows[0];
  }catch(problem){
-  if(wasMoved){
-   try{await diskMove(newPath,oldPath)}
-   catch(rollbackError){
-    console.error('ARTAE project rename rollback failed',oldProject.id,problem.message,rollbackError.message);
-    throw err('Название проекта не изменено в базе, но возврат папки не подтверждён. Не повторяйте операцию; нужна проверка путей.',503);
-   }
+  if(!wasMoved)throw problem;
+  let current;
+  try{
+   const rows=await db('project',{id:'eq.'+oldProject.id,select:'*'});
+   if(rows.length!==1)throw Error('Database row unavailable');
+   current=rows[0];
+  }catch(checkError){
+   console.error('ARTAE rename requires reconciliation',oldProject.id,problem.message,checkError.message);
+   throw err('Не удалось подтвердить состояние проекта. Папку не возвращали. Нужна проверка PostgreSQL и Яндекс Диска.',503);
+  }
+  if(current.folder_path===newPath){
+   if(current.name===name)return current;
+   throw err('Папка уже перемещена, но имя проекта отличается. Нужна проверка состояния.',409);
+  }
+  if(current.folder_path!==oldPath)throw err('Путь проекта изменён параллельно. Возврат папки запрещён.',409);
+  try{await diskMove(newPath,oldPath)}
+  catch(rollbackError){
+   console.error('ARTAE rename rollback failed',oldProject.id,problem.message,rollbackError.message);
+   throw err('Возврат папки не подтверждён. Нужна проверка путей.',503);
   }
   throw problem;
  }

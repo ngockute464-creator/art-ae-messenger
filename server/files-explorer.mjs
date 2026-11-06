@@ -3,6 +3,21 @@
 import {getSession} from './auth.mjs';
 const YD='https://cloud-api.yandex.net/v1/disk';
 const MAX_TRANSFER=3*1024*1024;
+async function readLimited(stream,max=MAX_TRANSFER){
+ if(!stream)return new Uint8Array();
+ const reader=stream.getReader(),chunks=[];let total=0;
+ try{
+  while(true){
+   const {done,value}=await reader.read();if(done)break;
+   total+=value.byteLength;
+   if(total>max){await reader.cancel().catch(()=>{});throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413})}
+   chunks.push(value);
+  }
+ }finally{reader.releaseLock()}
+ const bytes=new Uint8Array(total);let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength}
+ return bytes;
+}
 const uuid=x=>typeof x==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(x);
 const response=(x,status=200)=>Response.json(x,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 const isOrigin=req=>{try{return new URL(req.headers.get('origin')).origin===new URL(req.url).origin}catch{return false}};
@@ -96,16 +111,14 @@ async function download(root,rel){
  if(!r.ok)throw Object.assign(Error('Не удалось скачать файл'),{status:502});
  const size=Number(r.headers.get('content-length'));
  if(size>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
- const bytes=await r.arrayBuffer();
- if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ const bytes=await readLimited(r.body);
  return new Response(bytes,{status:200,headers:{'Content-Type':'application/octet-stream','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent(fileName(meta.name)),'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
 }
 async function upload(root,rel,name,request,overwrite=false){
  const safe=fileName(name);
  const length=Number(request.headers.get('content-length'));
  if(Number.isFinite(length)&&length>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
- const bytes=await request.arrayBuffer();
- if(bytes.byteLength>MAX_TRANSFER)throw Object.assign(Error('Файл превышает лимит 3 МБ'),{status:413});
+ const bytes=await readLimited(request.body);
  const target=apiPath(root,rel?rel+'/'+safe:safe);
  let link;try{link=await disk('GET','/resources/upload',{path:target,overwrite:overwrite?'true':'false'})}
  catch(error){if(error.status===409)throw Object.assign(Error('Файл с таким именем уже существует'),{status:409});throw error}

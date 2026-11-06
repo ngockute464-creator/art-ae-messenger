@@ -83,7 +83,7 @@ async function removeRemotePin(id){
 }
 async function updateRemoteNote(id,note){
  try{await pinsRequest('note',{id,note});await refreshPins()}
- catch(e){alert(e.message||'Не удалось сохранить примечание')}
+ catch(e){alert(e.message||'Не удалось сохранить примечание');throw e}
 }
 async function refreshRailFiles(){
  if(!project)return;

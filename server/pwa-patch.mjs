@@ -5,7 +5,7 @@ let html=readFileSync(indexPath,'utf8');
 if(!html.includes('href="manifest.webmanifest"'))throw Error('PWA: missing existing manifest');
 if(!html.includes('</body>'))throw Error('PWA: missing body close');
 html=html.replace('</head>','<meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="application-name" content="АРТ-АЕ"><meta name="artae-build" content="'+String(process.env.COMMIT_REF||'preview').replace(/[^A-Za-z0-9_-]/g,'').slice(0,12)+'"></head>');
-html=html.replace('</head>','<meta name="artae-version" content="0.2.9-preview"></head>');
+html=html.replace('</head>','<meta name="artae-version" content="0.3.0-preview"></head>');
 html=html.replace('</body>','<script src="pwa-client.js" defer></script></body>');
 writeFileSync(indexPath,html);
 const buildId=String(process.env.COMMIT_REF||'preview').replace(/[^A-Za-z0-9_-]/g,'').slice(0,40);

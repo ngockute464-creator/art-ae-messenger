@@ -57,7 +57,7 @@ async function connectRealtime(id){
     }else{socket.close()}
    }
    if(message.event==='broadcast'&&message.topic===topic&&message.payload?.event==='changed'){
-    if(syncBusy)setTimeout(()=>syncMessages(true),300);else syncMessages(true);
+    syncMessages(true);
    }
   };
   socket.onclose=()=>{if(generation!==rtGeneration)return;rtConnected=false;clearInterval(rtHeartbeat);clearTimeout(rtRefresh);scheduleRealtimeRetry(id)};
