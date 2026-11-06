@@ -172,6 +172,13 @@ export default async function handler(req){
    const m=await one('message',body.id);
    if(!m||m.conversation_id!==body.convo||m.deleted_at||!await activeConvo(body.convo))return reply({error:'Сообщение не найдено'},404);
    if(m.author_id!==session.user.id)return reply({error:'Можно изменять только свои сообщения'},403);
+   // Verify the revision the user originally saw, not only the current DB row.
+   // Prevent delayed saves/deletes from overwriting later changes on other devices.
+   if(!Object.hasOwn(body,'expectedEditedAt')||
+      !(body.expectedEditedAt===null||(Number.isSafeInteger(body.expectedEditedAt)&&body.expectedEditedAt>=0)))
+    return reply({error:'Обновите сообщение перед изменением'},409);
+   if(body.expectedEditedAt!==m.edited_at)
+    return reply({error:'Сообщение изменено на другом устройстве. Обновите беседу и повторите действие.'},409);
    const expected=m.edited_at===null?'is.null':'eq.'+String(m.edited_at);
    const stamp=Math.max(time(),Number(m.edited_at||0)+1);
    const patch=action==='edit'?{body:clean(body.text,6000),edited_at:stamp}:{deleted_at:stamp};

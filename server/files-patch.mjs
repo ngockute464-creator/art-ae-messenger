@@ -12,6 +12,12 @@ const uxClient=readFileSync('server/ux-client.js','utf8');
 const mentionsClient=readFileSync('server/file-mentions.js','utf8');
 const officeClient=readFileSync('server/office-client.js','utf8');
 replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\nfunction cp(){','client and resize functions');
+
+ // Capture the version when entering edit mode (not at save time).
+replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
+replace("syncApi('edit',{id:m.id,convo:m.convo,text})","syncApi('edit',{id:m.id,convo:m.convo,text,expectedEditedAt:editing.baseEditedAt})",'conditional message edit');
+replace("syncApi('delete',{id,convo:msg.convo})","syncApi('delete',{id,convo:msg.convo,expectedEditedAt:msg.editedAt??null})",'conditional message delete');
+
 replace('return '+b+'<aside class="convos">${convos().map',
         'return '+b+'<aside class="convos"><button class="add explorerLink" type="button" data-act="filesHome">📁 Файлы проекта</button>${convos().map',
         'project file navigation');
