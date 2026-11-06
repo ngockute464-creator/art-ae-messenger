@@ -28,7 +28,7 @@ function voiceMessageHtml(message){
  const meta=voiceParse(message.text);
  if(!meta)return linkify(message.text||'');
  const url=voiceAudioCache.get(meta.id);
- return '<div class="voiceMessage"><span>🎙 Голосовое · '+voiceDuration(meta.seconds)+'</span>'+(url?'<audio controls preload="metadata" src="'+esc(url)+'" aria-label="Воспроизвести голосовое сообщение"></audio>':'<button class="btn small" type="button" data-act="voicePlay" data-id="'+meta.id+'" '+(voiceAudioLoading.has(meta.id)?'disabled':'')+'>'+(voiceAudioLoading.has(meta.id)?'Загрузка…':'▶ Слушать')+'</button>')+'</div>';
+ return '<div class="voiceMessage"><span>🎙 Голосовое · '+voiceDuration(meta.seconds)+'</span>'+(url?'<audio controls preload="metadata" src="'+esc(url)+'" aria-label="Воспроизвести голосовое сообщение"></audio>':'<button class="btn small" type="button" data-act="voicePlay" data-id="'+meta.id+'" '+(voiceAudioLoading.has(meta.id)?'disabled':'')+'>'+(voiceAudioLoading.has(meta.id)?'Загрузка…':'▶ Слушать')+'</button>')+voiceTranscriptControls(message)+'</div>';
 }
 async function voiceStart(){
  if(voiceDraft){alert('Сначала завершите или отмените текущую запись.');return}
