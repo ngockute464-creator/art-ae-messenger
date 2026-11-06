@@ -26,7 +26,7 @@ const forbidden=x=>/[\x00-\x1f\\]/.test(x)||x==='.'||x==='..'||x==='__proto__';
 const relative=x=>{
  if(typeof x!=='string'||x.length>500||x.startsWith('/')||x.endsWith('/')||x.includes('//'))throw Object.assign(Error('Некорректный путь'),{status:400});
  if(x==='')return '';
- if(x.split('/').some(part=>['_artae_voice','_artae_edit_staging'].includes(part)))throw Object.assign(Error('Служебная папка'),{status:403});
+ if(x.split('/').some(part=>['_artae_voice','_artae_edit_staging','!ФайлыИзЧатов'].includes(part)))throw Object.assign(Error('Служебная папка'),{status:403});
  const parts=x.split('/');
  if(parts.length>12||parts.some(p=>!p||p.length>120||forbidden(p)))throw Object.assign(Error('Недопустимый путь'),{status:400});
  return parts.join('/');
@@ -34,7 +34,7 @@ const relative=x=>{
 function folderName(x){
  if(typeof x!=='string')throw Object.assign(Error('Недопустимое имя'),{status:400});
  const s=x.trim();
- if(!s||s.length>100||/[\\/:*?"<>|\x00-\x1f]/.test(s)||s==='.'||s==='..'||(s==='_system'||s==='_artae_voice'||s==='_artae_edit_staging')||s.endsWith('.'))throw Object.assign(Error('Недопустимое имя папки'),{status:400});
+ if(!s||s.length>100||/[\\/:*?"<>|\x00-\x1f]/.test(s)||s==='.'||s==='..'||(s==='_system'||s==='_artae_voice'||s==='_artae_edit_staging'||s==='!ФайлыИзЧатов')||s.endsWith('.'))throw Object.assign(Error('Недопустимое имя папки'),{status:400});
  return s;
 }
 function authEnv(){
@@ -69,7 +69,7 @@ function itemView(i,parent){
  // Resource paths returned by Yandex Disk may use a canonical namespace
  // rather than the app:/ alias used to make the request. Never compare them.
  // Build paths only from the current validated parent and safe direct-child name.
- if(!i||typeof i.name!=='string'||!i.name||(i.name==='_artae_voice'||i.name==='_artae_edit_staging')||i.name.length>255||
+ if(!i||typeof i.name!=='string'||!i.name||(i.name==='_artae_voice'||i.name==='_artae_edit_staging'||i.name==='!ФайлыИзЧатов')||i.name.length>255||
     i.name==='.'||i.name==='..'||/[\\/\x00-\x1f]/.test(i.name)||
     (i.type!=='dir'&&i.type!=='file'))return null;
  const relativePath=parent?parent+'/'+i.name:i.name;
@@ -78,7 +78,7 @@ function itemView(i,parent){
 }
 
 function fileName(x){
- if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||(x.toLowerCase()==='_artae_voice'||x.toLowerCase()==='_artae_edit_staging')||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
+ if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||(x.toLowerCase()==='_artae_voice'||x.toLowerCase()==='_artae_edit_staging'||x==='!ФайлыИзЧатов')||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
  return x;
 }
 function transferUrl(href){
@@ -185,20 +185,68 @@ async function requireOfficeLease(projectId,rel,token,session){
  if(!r.ok)throw Object.assign(Error('Блокировка истекла. Сохранение отменено, чтобы не перезаписать чужие изменения.'),{status:423});
 }
 
+
+const CHAT_FILES='!ФайлыИзЧатов';
+const chatFileToken=x=>typeof x==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(x);
+async function chatConvoProject(convo,projectId){
+ if(!uuid(convo))throw Object.assign(Error('Неверный разговор'),{status:400});
+ const {base,key}=authEnv(),url=new URL(base+'/rest/v1/artae_conversations');
+ url.search=new URLSearchParams({id:'eq.'+convo,project_id:'eq.'+projectId,deleted_at:'is.null',select:'id',limit:'1'}).toString();
+ const r=await fetch(url,{headers:{apikey:key,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+ if(!r.ok)throw Object.assign(Error('Нельзя проверить разговор'),{status:502});
+ const found=await r.json();
+ if(!found.length)throw Object.assign(Error('Разговор не принадлежит проекту'),{status:403});
+}
+async function chatFolder(root){
+ const path=root+'/'+CHAT_FILES;
+ try{await disk('PUT','/resources',{path})}catch(e){if(e.status!==409)throw e}
+ return path;
+}
+function chatObjectName(id,name){
+ if(!chatFileToken(id))throw Object.assign(Error('Недопустимый идентификатор файла'),{status:400});
+ return id+'__'+fileName(name);
+}
+
 export default async function handler(request){
  if(!['GET','POST'].includes(request.method))return response({error:'Method not allowed'},405);
  if(request.method==='POST'&&!isOrigin(request))return response({error:'Недопустимый запрос'},403);
  try{
   const session=await getSession(request);if(!session)return response({error:'Требуется вход'},401);
   const url=new URL(request.url);let args={};
-  if(request.method==='POST'&&['upload','officeSave'].includes(url.searchParams.get('action'))&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
-   args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1',expectedModified:url.searchParams.get('expectedModified'),editToken:url.searchParams.get('editToken')};
+  if(request.method==='POST'&&['upload','officeSave','chatUpload'].includes(url.searchParams.get('action'))&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
+   args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1',expectedModified:url.searchParams.get('expectedModified'),editToken:url.searchParams.get('editToken'),convo:url.searchParams.get('convo'),fileId:url.searchParams.get('fileId')};
   }else if(request.method==='POST'){
    if(!request.headers.get('content-type')?.startsWith('application/json'))return response({error:'Недопустимый формат запроса'},415);
    try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}
-  }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||''};
+  }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',convo:url.searchParams.get('convo'),fileId:url.searchParams.get('fileId'),name:url.searchParams.get('name')};
   const p=await project(args.project);
   const rel=relative(args.path||'');
+  if(['chatUpload','chatUploadLink','chatDownloadLink'].includes(args.action)){
+   await chatConvoProject(args.convo,p.id);
+   const name=fileName(args.name),object=chatObjectName(args.fileId,name);
+   const path=p.folder_path+'/'+CHAT_FILES+'/'+object;
+   if(args.action==='chatUpload'&&request.method==='POST'){
+    // Small file compatibility path, within Netlify's binary response/request limit.
+    await chatFolder(p.folder_path);
+    const bytes=await readLimited(request.body);
+    const link=await disk('GET','/resources/upload',{path,overwrite:'true'});
+    const r=await transferFetch(link.href,{method:link.method==='POST'?'POST':'PUT',body:bytes,headers:{'Content-Type':'application/octet-stream'}});
+    if(!r.ok)throw Object.assign(Error('Не удалось сохранить вложение'),{status:502});
+    return response({ok:true,fileId:args.fileId,name});
+   }
+   if(args.action==='chatUploadLink'&&request.method==='POST'){
+    await chatFolder(p.folder_path);
+    const link=await disk('GET','/resources/upload',{path,overwrite:'true'});
+    return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
+   }
+   if(args.action==='chatDownloadLink'&&request.method==='GET'){
+    const metadata=await disk('GET','/resources',{path,fields:'type,size'});
+    if(metadata.type!=='file')throw Object.assign(Error('Вложение не найдено'),{status:404});
+    const link=await disk('GET','/resources/download',{path});
+    return response({href:transferUrl(link.href).toString(),name,size:metadata.size});
+   }
+  }
+
   if(['officeEditAcquire','officeEditRenew','officeEditRelease'].includes(args.action)&&request.method==='POST'){
    if(!rel||!/\.(docx|xlsx)$/i.test(rel))throw Object.assign(Error('Редактировать можно только DOCX и XLSX'),{status:400});
    const action=args.action==='officeEditAcquire'?'acquire':args.action==='officeEditRenew'?'renew':'release';
