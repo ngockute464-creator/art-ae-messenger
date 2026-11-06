@@ -55,7 +55,25 @@ export default async function handler(request){
   let body={};if(!isGet){try{body=await request.json()}catch{return reply({error:'Invalid JSON'},400)}}
   const method=action||body.action;
   if(method==='status'&&isGet){const users=await db('artae_users',{role:'eq.admin',select:'id',limit:'1'});return reply({initialized:users.length>0})}
-  if(method==='bootstrap'&&!isGet)return reply({error:'Администратор уже создан. Используйте действующий ключ.'},409);
+  if(method==='bootstrap'&&!isGet){
+   if(process.env.ARTAE_ALLOW_FRESH_BOOTSTRAP!=='1')
+    return reply({error:'Первичная установка отключена'},409);
+   const setup=process.env.ARTAE_SETUP_KEY;
+   if(typeof setup!=='string'||setup.length<20||!safeEqual(body.setupKey,setup))
+    return reply({error:'Неверный установочный ключ'},403);
+   const existing=await db('artae_users',{select:'id',limit:'1'});
+   if(existing.length)return reply({error:'Установка уже содержит пользователей'},409);
+   const name=cleanName(body.name)||'Администратор',accessKey=secret();
+   const admin={id:randomUUID(),name,role:'admin',key_hash:hash(accessKey),generation:1,disabled:false};
+   try{
+    const created=await db('artae_users',{},'POST',admin);
+    if(created.length!==1)throw Error('Administrator creation not confirmed');
+    return reply({ok:true,accessKey,user:userView(created[0])});
+   }catch(error){
+    if(error.code==='23505')return reply({error:'Администратор уже создан'},409);
+    throw error;
+   }
+  }
   if(method==='login'&&!isGet){
    const login=await loginWithKey(String(body.accessKey||''));
    if(!login)return reply({error:'Неверный ключ доступа'},401);
