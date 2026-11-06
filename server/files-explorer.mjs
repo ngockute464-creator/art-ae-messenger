@@ -170,14 +170,35 @@ export default async function handler(request){
  try{
   const session=await getSession(request);if(!session)return response({error:'Требуется вход'},401);
   const url=new URL(request.url);let args={};
-  if(request.method==='POST'&&url.searchParams.get('action')==='upload'&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
-   args={action:'upload',project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1'};
+  if(request.method==='POST'&&['upload','officeSave'].includes(url.searchParams.get('action'))&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
+   args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1',expectedModified:url.searchParams.get('expectedModified')};
   }else if(request.method==='POST'){
    if(!request.headers.get('content-type')?.startsWith('application/json'))return response({error:'Недопустимый формат запроса'},415);
    try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}
   }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||''};
   const p=await project(args.project);
   const rel=relative(args.path||'');
+  if(args.action==='officeVersion'&&request.method==='GET'){
+   if(!rel||!/\.(docx|xlsx)$/i.test(rel))throw Object.assign(Error('Недопустимый документ'),{status:400});
+   const info=await disk('GET','/resources',{path:apiPath(p.folder_path,rel),fields:'type,modified,size,name'});
+   if(info.type!=='file'||typeof info.modified!=='string'||!info.modified)throw Object.assign(Error('Документ недоступен'),{status:404});
+   return response({modified:info.modified,size:info.size});
+  }
+  if(args.action==='officeSave'&&request.method==='POST'){
+   // Save the same document, not an arbitrary new name.
+   if(!rel||!/\.(docx|xlsx)$/i.test(rel)||typeof args.expectedModified!=='string'||!args.expectedModified||args.expectedModified.length>100)
+    throw Object.assign(Error('Неверная версия документа'),{status:400});
+   const full=apiPath(p.folder_path,rel);
+   const current=await disk('GET','/resources',{path:full,fields:'type,modified,size,name'});
+   if(current.type!=='file')throw Object.assign(Error('Документ не найден'),{status:404});
+   if(current.modified!==args.expectedModified)throw Object.assign(Error('Документ изменён другим участником. Обновите документ перед сохранением.'),{status:409});
+   const name=rel.split('/').pop(),folder=rel.slice(0,Math.max(0,rel.lastIndexOf('/')));
+   // Existing bounded transfer protects Netlify payload and server memory.
+   await upload(p.folder_path,folder,name,request,true);
+   const updated=await disk('GET','/resources',{path:full,fields:'modified,size'});
+   if(typeof updated.modified!=='string')throw Object.assign(Error('Файл записан, но новая версия не подтверждена'),{status:502});
+   return response({ok:true,modified:updated.modified,size:updated.size});
+  }
   if(args.action==='uploadLink'&&request.method==='POST'){
    const name=fileName(args.name);
    const target=apiPath(p.folder_path,rel?rel+'/'+name:name);
