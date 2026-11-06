@@ -7,6 +7,32 @@
 if(window.__ARTAE_OFFICE_READY__)return;
 window.__ARTAE_OFFICE_READY__=true;
 let active=null;
+async function officeLeaseRequest(action,ctx){
+ const response=await fetch('/.netlify/functions/files-explorer',{method:'POST',credentials:'same-origin',
+  headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({action,project:ctx.projectId,path:ctx.path,editToken:ctx.editToken}),
+  keepalive:action==='officeEditRelease'});
+ let result={};try{result=await response.json()}catch{}
+ if(!response.ok||!result.ok)throw Error(result.error||(result.holder?'Редактирует '+result.holder:'Не удалось получить блокировку документа'));
+ return result;
+}
+function releaseOfficeLease(ctx){
+ if(!ctx?.editToken||ctx.released)return;
+ ctx.released=true;
+ if(ctx.leaseTimer){clearInterval(ctx.leaseTimer);ctx.leaseTimer=null}
+ officeLeaseRequest('officeEditRelease',ctx).catch(e=>console.warn('Office unlock failed, lease will expire',e));
+}
+function startOfficeLeaseHeartbeat(ctx,state,saveButton){
+ if(!ctx.editToken)return;
+ ctx.leaseTimer=setInterval(async()=>{
+  if(ctx.renewing||ctx.released||active!==ctx)return;
+  ctx.renewing=true;
+  try{await officeLeaseRequest('officeEditRenew',ctx);ctx.leaseFailed=false}
+  catch(error){ctx.leaseFailed=true;state.textContent='Блокировка утрачена. Сохранение недоступно: '+String(error.message||error);saveButton.disabled=true}
+  finally{ctx.renewing=false}
+ },30000);
+}
+
 let warmDocx=null;
 let warmXlsx=null;
 const officeOrigin=window.ARTAE_OFFICE_ORIGIN||null;
@@ -66,7 +92,7 @@ window.ARTAE_OFFICE_PREWARM_XLSX=prewarmOfficeXlsx;
 window.ARTAE_OFFICE_PREWARM=prewarmOfficeDocx;
 
 function close(){
- const a=active;if(!a)return;active=null;
+ const a=active;if(!a)return;active=null;releaseOfficeLease(a);
  window.removeEventListener('message',a.message);
  if(a.pdfUrl){URL.revokeObjectURL(a.pdfUrl);a.pdfUrl=null}
  a.overlay.remove();
@@ -74,7 +100,7 @@ function close(){
 }
 function finishDocxClose(ctx){
  if(active!==ctx)return;
- active=null;
+ active=null;releaseOfficeLease(ctx);
  window.removeEventListener('message',ctx.message);
  if(ctx.pdfUrl){URL.revokeObjectURL(ctx.pdfUrl);ctx.pdfUrl=null}
  const host=ctx.overlay;
@@ -104,6 +130,12 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
  try{requireOfficeOrigin()}catch(error){alert(error.message);return}
  if(!/\.(docx|xlsx)$/i.test(name))return;
  if(!localFile&&!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
+ // Atomically lock before initializing the editor, including Office prewarm reuse.
+ let acquired=null;
+ if(mode==='edit'&&!localFile){
+  try{acquired=await officeLeaseRequest('officeEditAcquire',{projectId,path,editToken:null})}
+  catch(e){alert('Документ уже редактируется или блокировка недоступна. '+String(e.message||e));return}
+ }
  let overlay=document.createElement('div');overlay.className='artaeOfficeOverlay';
  const box=document.createElement('section');box.className='artaeOfficePanel';
  box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label',(mode==='preview'?'Просмотр ':'Редактирование ')+name);
@@ -156,14 +188,15 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false,savePreparing:false};active=ctx;
+ const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false,savePreparing:false,editToken:acquired?.editToken||null,path,leaseTimer:null,renewing:false,leaseFailed:false,released:false};active=ctx;
+ startOfficeLeaseHeartbeat(ctx,state,saveButton);
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer,remoteSave:mode==='edit'&&!localFile},officeOrigin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==officeOrigin||event.source!==frame.contentWindow)return;
   const msg=event.data;if(!msg||typeof msg.type!=='string')return;
   if(msg.type==='artae-office-save-command-done'){ctx.savePreparing=false;return;}
   if(msg.type==='artae-office-save'){
-   if(ctx.mode!=='edit'||localFile||ctx.saving||!ctx.version||!(msg.blob instanceof Blob)||msg.blob.size===0){
+   if(ctx.mode!=='edit'||localFile||ctx.saving||ctx.leaseFailed||!ctx.editToken||!ctx.version||!(msg.blob instanceof Blob)||msg.blob.size===0){
     frame.contentWindow.postMessage({type:'artae-office-save-result',requestId:msg.requestId,ok:false,error:'Сохранение недоступно'},officeOrigin);
     return;
    }
@@ -171,7 +204,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    void (async()=>{
     let ok=false,error='';
     try{
-     const query=new URLSearchParams({action:'officeSave',project:projectId,path,expectedModified:ctx.version});
+     const query=new URLSearchParams({action:'officeSave',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken});
      let result={};
      if(msg.blob.size<=3*1024*1024){
       const response=await fetch('/.netlify/functions/files-explorer?'+query,{
@@ -183,7 +216,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
       // Keep large binary bytes out of Netlify's body-size-limited Functions.
       const auth=await fetch('/.netlify/functions/files-explorer',{
        method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({action:'officeSaveLink',project:projectId,path,expectedModified:ctx.version})
+       body:JSON.stringify({action:'officeSaveLink',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
       });
       let signed={};try{signed=await auth.json()}catch{}
       if(!auth.ok)throw Error(signed.error||'Не удалось подтвердить версию документа');
@@ -266,7 +299,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   ctx.buffer=await blob.arrayBuffer();
   ctx.fileAt=performance.now();
   send();
- }catch(error){if(active===ctx)state.textContent='Ошибка загрузки: '+String(error?.message||error)}
+ }catch(error){if(active===ctx){state.textContent='Ошибка загрузки: '+String(error?.message||error);releaseOfficeLease(ctx)}}
 }
 window.ARTAE_OFFICE_PREVIEW=(path,name,projectId)=>openProjectDocument(path,name,projectId,null,'preview');
 // Central file explorer routes preview actions; only edit uses capture here.
@@ -295,5 +328,6 @@ const css=document.createElement('style');css.textContent=`
 .artaeOfficeFrame{flex:1;min-height:0;width:100%;border:0;background:#fff}
 @media(max-width:650px){.artaeOfficeTop{gap:7px;flex-wrap:wrap;padding:6px 9px}.artaeOfficeTop strong{flex-basis:40%}.artaeOfficeHint{display:none}}
 `;
+window.addEventListener('pagehide',()=>{if(active)releaseOfficeLease(active)});
 document.head.append(css);
 })();
