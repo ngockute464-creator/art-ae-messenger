@@ -1,0 +1,18 @@
+# АРТ-АЕ: названия переменных текущей Netlify-сборки
+# НЕ вставлять действующие токены в репозиторий или архив.
+SUPABASE_URL=
+SUPABASE_SECRET_KEY=
+SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SIGNING_JWK=
+YANDEX_DISK_TOKEN=
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_AI_TOKEN=
+
+# Необязательные: только после отдельной проверки Office isolation:
+# ARTAE_OFFICE_ORIGIN=https://office.example.org
+# ARTAE_PARENT_ORIGIN=https://messenger.example.org
+
+# Только для ИЗОЛИРОВАННОЙ новой установки/сценария восстановления:
+# ARTAE_ALLOW_FRESH_BOOTSTRAP=0
+# ARTAE_SETUP_KEY=
+# Версия Netlify по умолчанию получает COMMIT_REF из среды сборки.
