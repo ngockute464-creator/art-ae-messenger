@@ -1,0 +1,3 @@
+# E13 guarded preview: large files
+Small files (<=3 MiB) use the established Netlify proxied path without behavioral changes. Files >3 MiB use scoped Yandex Disk transfer URLs with auth verified on Netlify before returning the URL. Browser cross-origin uploads and large preview fetches still require real CORS testing, and large previews may show an explicit fallback error to download. Download uses provider temporary-link browser navigation.
+Not a guarantee of unlimited file size: actual limits from Yandex plan, browser RAM, file transfer service and CORS remain. No schema migration.

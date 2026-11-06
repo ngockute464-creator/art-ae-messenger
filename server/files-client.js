@@ -185,13 +185,13 @@ async function explorerUpload(file){
  if(view==='files'||railFileVisible())render();
  explorerUploadUpdate();
  try{
-  try{await explorerSendDirect(file,id,path,overwrite)}
+  try{await (file.size<=explorerLegacyTransferLimit?explorerSendUpload(file,id,path,overwrite):explorerSendDirect(file,id,path,overwrite))}
   catch(error){
    if(error.status!==409||overwrite)throw error;
    if(!confirm('Файл «'+file.name+'» уже существует. Заменить его?'))return;
    overwrite=true;
    if(explorerUploading){explorerUploading.percent=0;explorerUploading.processing=false;explorerUploadUpdate()}
-   await explorerSendDirect(file,id,path,true);
+   await (file.size<=explorerLegacyTransferLimit?explorerSendUpload(file,id,path,true):explorerSendDirect(file,id,path,true));
   }
   if(id===project&&(view==='files'||railFileVisible())&&explorer.path===path)await explorerLoad(path);
  }catch(error){alert(error.message||'Не удалось загрузить файл')}
