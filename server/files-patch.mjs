@@ -14,7 +14,8 @@ const officeClient=readFileSync('server/office-client.js','utf8');
 const reliableSend=readFileSync('server/reliable-send.js','utf8');
 const voiceClient=readFileSync('server/voice-client.js','utf8');
 const transcriptClient=readFileSync('server/transcript-client.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+voiceClient+'\n'+transcriptClient+'\nfunction cp(){','client and resize functions');
+const chatFileClient=readFileSync('server/chat-file-client.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -86,6 +87,12 @@ replace('<button class="btn small" type="button" data-act="addEditFile">',
 replace('</button><div class="editActions"><button class="btn primary" type="submit">Сохранить изменения</button>',
         '</button><button class="btn primary" type="submit">Сохранить</button>',
         'message edit save inline');
+// E16 — replace the former upload placeholder.
+const chatUploadStub=app.match(/else if\(action==='upload'\)alert\('[^']*'\);/);
+if(!chatUploadStub)throw Error('Chat attachment placeholder not found');
+app=app.replace(chatUploadStub[0],"else if(action==='upload')chatFilePick();");
+replace('${voiceMessageHtml(m)}','${chatFileMessageHtml(m)}','chat attachment message renderer');
+replace('${getDraft().files.map((f,i)=>','${chatFileDraftHtml()}${getDraft().files.map((f,i)=>','chat attachment draft chips');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
@@ -176,4 +183,5 @@ css+='\n'+".voiceTranscriptActions{display:flex;align-items:center;gap:7px;flex-
 css+='\n'+"\n/* E11: one-line compact voice playback/transcription controls. */\n.voiceMessage{display:flex;flex-direction:column;align-items:flex-start;gap:5px;max-width:100%;min-width:0}\n.voiceMessageRow{display:flex;flex-wrap:nowrap;align-items:center;gap:9px;max-width:100%;min-width:0}\n.voiceSpeaker{flex:none;font-size:17px;line-height:1}\n.voiceTime{flex:none;font:14px/1.4 Arial,Helvetica,sans-serif;white-space:nowrap;font-variant-numeric:tabular-nums}\n.voicePlayIcon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;border:1px solid #d4dbe6;border-radius:8px;background:transparent;color:inherit;font:16px/1 Arial,Helvetica,sans-serif;cursor:pointer}\n.voicePlayIcon:hover,.voicePlayIcon:focus-visible{background:rgba(120,140,160,.13)}\n.voicePlayIcon:disabled{opacity:.5;cursor:default}\n.voiceTranscriptTrigger{white-space:nowrap;font:13px/1.3 Arial,Helvetica,sans-serif;min-height:30px}\n.voiceTranscriptProgress{display:block;flex:0 1 110px;width:110px;min-width:50px;height:9px;accent-color:#159447}\n.voiceTranscriptText{align-self:stretch}\n@media(max-width:650px){.voiceMessageRow{gap:6px}.voiceTranscriptProgress{width:70px;flex-basis:70px}}\n";
 css+='\n'+"\n/* E12: equal-sized buttons, input and SVG icons on desktop and mobile. */\n.composeLine{display:flex;align-items:center;gap:8px}\n.composeLine > button.btn{flex:0 0 40px;box-sizing:border-box;width:40px;min-width:40px;height:40px;min-height:40px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;border-radius:10px}\n.composeLine > button.btn svg{display:block;flex:none;width:22px;height:22px}\n.composeLine > button.composerSend,.composeLine > button.composerSend:hover{background:transparent;border-color:transparent;color:#2869dc}\n.composeLine > button.composerSend:hover{background:rgba(40,105,220,.09)}\n.composeLine > textarea#draft{box-sizing:border-box;flex:1 1 auto;width:100%;min-width:0;height:40px;min-height:40px;max-height:110px;padding:9px 11px;margin:0;line-height:20px;font:14px/20px Arial,Helvetica,sans-serif;resize:none}\n@media(max-width:650px){.composeLine{gap:6px}.composeLine > button.btn{width:40px;min-width:40px;height:40px;min-height:40px;padding:0}.composeLine > textarea#draft{min-height:40px;height:40px;padding:9px 10px}}\n";
 css+='\n'+"\n.messageEdit .editActions{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;width:100%;max-width:100%;overflow-x:auto;padding-top:8px}\n.messageEdit .editActions .btn{flex:0 0 auto;white-space:nowrap;font:13px/1.3 Arial,Helvetica,sans-serif;min-height:36px;padding:7px 10px}\n@media(max-width:650px){.messageEdit .editActions{gap:5px}.messageEdit .editActions .btn{font-size:12px;padding:7px 8px}}\n";
+css+='\n'+"\n.chatStoredFiles{display:flex;flex-direction:column;align-items:flex-start;gap:5px;margin-top:5px;max-width:100%}\n.chatStoredFile{display:flex;align-items:center;gap:8px;max-width:100%;padding:7px 9px;border:1px solid #d4dbe6;border-radius:9px;background:transparent;color:inherit;text-align:left;cursor:pointer}\n.chatStoredFile:hover{background:rgba(120,140,160,.09)}\n.chatStoredFileName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}\n.chatStoredFileSize{font-size:11px;white-space:nowrap;opacity:.65}\n.chatFileCaption{white-space:pre-wrap;overflow-wrap:anywhere}\n";
 writeFileSync(cssFile,css);
