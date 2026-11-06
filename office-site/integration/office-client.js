@@ -78,7 +78,7 @@ function finishDocxClose(ctx){
  window.removeEventListener('message',ctx.message);
  if(ctx.pdfUrl){URL.revokeObjectURL(ctx.pdfUrl);ctx.pdfUrl=null}
  const host=ctx.overlay;
- host.querySelectorAll('.artaePdfViewer,.artaePdfFallback').forEach(el=>el.remove());
+ host.querySelectorAll('.artaePdfViewer,.artaePdfFallback,.artaePdfActions').forEach(el=>el.remove());
  ctx.frame.style.display='';
  // The iframe never leaves its DOM parent; closing Quire resets to a fresh
  // blank document before we hide it. Keep the ready engine for the next DOCX.
