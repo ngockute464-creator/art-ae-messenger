@@ -325,6 +325,16 @@ document.addEventListener('change',e=>{
  }
 },true);
 
+// Native details menus: only one open at a time; click outside or Escape closes it.
+document.addEventListener('click',event=>{
+ const menus=document.querySelectorAll('.fileMoreMenu[open]');
+ const clicked=event.target.closest?.('.fileMoreMenu');
+ for(const menu of menus)if(menu!==clicked||event.target.closest?.('.fileMorePanel [data-act]'))menu.open=false;
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape')for(const menu of document.querySelectorAll('.fileMoreMenu[open]'))menu.open=false;
+});
+
 function filesView(){
  if(explorer.project!==project)return '<section class="pane"><p class="help">Загрузка…</p></section>';
  const back=explorer.path?'<button type="button" class="btn small" data-act="filesUp">↑ На уровень выше</button>':'';
@@ -334,8 +344,11 @@ function filesView(){
 
   if(isFolder)return '<button type="button" class="fileEntry" data-act="filesOpen" data-path="'+esc(item.path)+'"><span class="fileGlyph" aria-hidden="true">📁</span><span class="fileEntryName">'+esc(item.name)+'</span><span class="fileEntryMeta">'+esc(size)+'</span><span aria-hidden="true">›</span></button>';
   const canOffice=/\.(docx|xlsx)$/i.test(item.name);
-   const editAction=canOffice?'<button type="button" class="fileActionBtn" data-act="officeEdit" data-project="'+esc(String(explorer.project))+'" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Редактировать копию в VibeOffice" aria-label="Редактировать '+esc(item.name)+'">✎</button>':'';
-   return '<div class="fileEntry"><span class="fileActionButtons">'+editAction+'<button type="button" class="fileActionBtn" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'" title="Посмотреть" aria-label="Посмотреть '+esc(item.name)+'">🔍</button><button type="button" class="fileActionBtn" data-act="filesDownload" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Скачать" aria-label="Скачать '+esc(item.name)+'">↓</button><button type="button" class="fileActionBtn" data-act="filesDelete" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" title="Удалить файл" aria-label="Удалить '+esc(item.name)+'">🗑</button></span><button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+esc(item.path)+'" data-name="'+esc(item.name)+'" data-mime="'+esc(item.mimeType||'')+'">'+esc(item.name)+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn filePinBtn '+(data.pins.some(p=>p.project===project&&p.kind==='file'&&p.scope==='project'&&p.scopeId===project&&p.item===item.path)?'is-pinned':'is-unpinned')+'" data-act="pinFile" data-path="'+esc(item.path)+'" title="'+(data.pins.some(p=>p.project===project&&p.kind==='file'&&p.scope==='project'&&p.scopeId===project&&p.item===item.path)?'Открепить файл':'Закрепить в проекте')+'" aria-label="'+(data.pins.some(p=>p.project===project&&p.kind==='file'&&p.scope==='project'&&p.scopeId===project&&p.item===item.path)?'Открепить ':'Закрепить ')+esc(item.name)+'" aria-pressed="'+(data.pins.some(p=>p.project===project&&p.kind==='file'&&p.scope==='project'&&p.scopeId===project&&p.item===item.path)?'true':'false')+'"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16 9V4l1-1V2H7v1l1 1v5l-2 2v2h5v9h2v-9h5v-2l-2-2z"/></svg></button></div>';
+  const pinned=data.pins.some(p=>p.project===project&&p.kind==='file'&&p.scope==='project'&&p.scopeId===project&&p.item===item.path);
+  const path=esc(item.path),name=esc(item.name);
+  const editAction=canOffice?'<button type="button" data-act="officeEdit" data-project="'+esc(String(explorer.project))+'" data-path="'+path+'" data-name="'+name+'" role="menuitem">Редактировать</button>':'';
+  const menu='<details class="fileMoreMenu"><summary title="Действия с файлом" aria-label="Действия с файлом '+name+'">⋯</summary><div class="fileMorePanel" role="menu" aria-label="Действия с файлом">'+editAction+'<button type="button" data-act="filesDelete" data-path="'+path+'" data-name="'+name+'" role="menuitem" class="fileMoreDanger">Удалить</button></div></details>';
+  return '<div class="fileEntry">'+menu+'<button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+path+'" data-name="'+name+'" data-mime="'+esc(item.mimeType||'')+'" title="Просмотреть файл">'+name+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn" data-act="filesDownload" data-path="'+path+'" data-name="'+name+'" title="Скачать" aria-label="Скачать '+name+'">↓</button><button type="button" class="fileActionBtn filePinBtn '+(pinned?'is-pinned':'is-unpinned')+'" data-act="pinFile" data-path="'+path+'" title="'+(pinned?'Открепить файл':'Закрепить в проекте')+'" aria-label="'+(pinned?'Открепить ':'Закрепить ')+name+'" aria-pressed="'+(pinned?'true':'false')+'"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16 9V4l1-1V2H7v1l1 1v5l-2 2v2h5v9h2v-9h5v-2l-2-2z"/></svg></button></div>';
 
  }).join('');
  const upload=explorerUploading&&explorerUploading.project===explorer.project&&explorerUploading.path===explorer.path;
