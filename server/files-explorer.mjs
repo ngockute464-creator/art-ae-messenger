@@ -1,6 +1,7 @@
 // ART-AE project file explorer API (folders and bounded file transfers).
 // Scoped to an existing project folder on Yandex Disk. No auth secrets in browser.
 import {getSession} from './auth.mjs';
+import {randomUUID} from 'node:crypto';
 const YD='https://cloud-api.yandex.net/v1/disk';
 const MAX_TRANSFER=3*1024*1024;
 async function readLimited(stream,max=MAX_TRANSFER){
@@ -164,6 +165,26 @@ async function list(root,rel){
  }
  return {items:items.sort((a,b)=>(a.type===b.type?0:a.type==='folder'?-1:1)||a.name.localeCompare(b.name,'ru')),total,hasMore:offset<total};
 }
+
+async function officeLease(action,projectId,rel,token,session){
+ const env=authEnv(),url=new URL(env.base+'/rest/v1/rpc/artae_office_lease');
+ const r=await fetch(url,{method:'POST',headers:{apikey:env.key,'Content-Type':'application/json',Accept:'application/json'},
+ body:JSON.stringify({p_action:action,p_project:projectId,p_path:rel,p_token:token,p_user:session.user.id,p_name:session.user.name}),
+ signal:AbortSignal.timeout(12000)});
+ if(!r.ok)throw Object.assign(Error('Блокировка редактирования недоступна'),{status:503});
+ return r.json();
+}
+async function guardOfficeFile(projectId,rel,session){
+ if(!/\.(docx|xlsx)$/i.test(rel))return;
+ const lock=await officeLease('status',projectId,rel,'00000000-0000-0000-0000-000000000000',session);
+ if(lock.busy)throw Object.assign(Error('Документ сейчас редактирует '+(lock.holder||'другой участник')),{status:423});
+}
+async function requireOfficeLease(projectId,rel,token,session){
+ if(!uuid(token))throw Object.assign(Error('Нет действующей блокировки редактирования'),{status:423});
+ const r=await officeLease('verify',projectId,rel,token,session);
+ if(!r.ok)throw Object.assign(Error('Блокировка истекла. Сохранение отменено, чтобы не перезаписать чужие изменения.'),{status:423});
+}
+
 export default async function handler(request){
  if(!['GET','POST'].includes(request.method))return response({error:'Method not allowed'},405);
  if(request.method==='POST'&&!isOrigin(request))return response({error:'Недопустимый запрос'},403);
@@ -171,13 +192,25 @@ export default async function handler(request){
   const session=await getSession(request);if(!session)return response({error:'Требуется вход'},401);
   const url=new URL(request.url);let args={};
   if(request.method==='POST'&&['upload','officeSave'].includes(url.searchParams.get('action'))&&request.headers.get('content-type')?.split(';')[0]==='application/octet-stream'){
-   args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1',expectedModified:url.searchParams.get('expectedModified')};
+   args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',name:url.searchParams.get('name'),overwrite:url.searchParams.get('overwrite')==='1',expectedModified:url.searchParams.get('expectedModified'),editToken:url.searchParams.get('editToken')};
   }else if(request.method==='POST'){
    if(!request.headers.get('content-type')?.startsWith('application/json'))return response({error:'Недопустимый формат запроса'},415);
    try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}
   }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||''};
   const p=await project(args.project);
   const rel=relative(args.path||'');
+  if(['officeEditAcquire','officeEditRenew','officeEditRelease'].includes(args.action)&&request.method==='POST'){
+   if(!rel||!/\.(docx|xlsx)$/i.test(rel))throw Object.assign(Error('Редактировать можно только DOCX и XLSX'),{status:400});
+   const action=args.action==='officeEditAcquire'?'acquire':args.action==='officeEditRenew'?'renew':'release';
+   const leaseToken=action==='acquire'?randomUUID():args.editToken;
+   if(!uuid(leaseToken))throw Object.assign(Error('Недопустимый ключ блокировки'),{status:400});
+   if(action==='acquire'){
+    const meta=await disk('GET','/resources',{path:apiPath(p.folder_path,rel),fields:'type,name'});
+    if(meta.type!=='file')throw Object.assign(Error('Документ не найден'),{status:404});
+   }
+   const lease=await officeLease(action,p.id,rel,leaseToken,session);
+   return response({...lease,editToken:lease.ok&&action==='acquire'?leaseToken:undefined},lease.ok?200:423);
+  }
   if(args.action==='officeVersion'&&request.method==='GET'){
    if(!rel||!/\.(docx|xlsx)$/i.test(rel))throw Object.assign(Error('Недопустимый документ'),{status:400});
    const info=await disk('GET','/resources',{path:apiPath(p.folder_path,rel),fields:'type,modified,size,name'});
@@ -185,6 +218,7 @@ export default async function handler(request){
    return response({modified:info.modified,size:info.size});
   }
   if(args.action==='officeSave'&&request.method==='POST'){
+   await requireOfficeLease(p.id,rel,args.editToken,session);
    // Save the same document, not an arbitrary new name.
    if(!rel||!/\.(docx|xlsx)$/i.test(rel)||typeof args.expectedModified!=='string'||!args.expectedModified||args.expectedModified.length>100)
     throw Object.assign(Error('Неверная версия документа'),{status:400});
@@ -202,6 +236,7 @@ export default async function handler(request){
   if(args.action==='officeSaveLink'&&request.method==='POST'){
    if(!rel||!/\.(docx|xlsx)$/i.test(rel)||typeof args.expectedModified!=='string'||!args.expectedModified||args.expectedModified.length>100)
     throw Object.assign(Error('Неверная версия документа'),{status:400});
+   await requireOfficeLease(p.id,rel,args.editToken,session);
    const full=apiPath(p.folder_path,rel);
    const current=await disk('GET','/resources',{path:full,fields:'type,modified'});
    if(current.type!=='file')throw Object.assign(Error('Документ не найден'),{status:404});
@@ -211,6 +246,7 @@ export default async function handler(request){
   }
   if(args.action==='uploadLink'&&request.method==='POST'){
    const name=fileName(args.name);
+   await guardOfficeFile(p.id,rel?rel+'/'+name:name,session);
    const target=apiPath(p.folder_path,rel?rel+'/'+name:name);
    const link=await disk('GET','/resources/upload',{path:target,overwrite:args.overwrite===true?'true':'false'});
    return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
@@ -228,8 +264,8 @@ export default async function handler(request){
    return response({project:{id:p.id,name:p.name},path:rel,...result});
   }
   if(args.action==='download'&&request.method==='GET')return await download(p.folder_path,rel);
-  if(args.action==='upload'&&request.method==='POST')return await upload(p.folder_path,rel,args.name,request,args.overwrite===true);
-   if(args.action==='delete'&&request.method==='POST')return await removeFile(p.folder_path,rel,p.id);
+  if(args.action==='upload'&&request.method==='POST'){await guardOfficeFile(p.id,rel?rel+'/'+fileName(args.name):fileName(args.name),session);return await upload(p.folder_path,rel,args.name,request,args.overwrite===true)}
+   if(args.action==='delete'&&request.method==='POST'){await guardOfficeFile(p.id,rel,session);return await removeFile(p.folder_path,rel,p.id)}
   if(args.action==='mkdir'&&request.method==='POST'){
    const name=folderName(args.name);
    try{await disk('PUT','/resources',{path:apiPath(p.folder_path,rel?rel+'/'+name:name)})}
