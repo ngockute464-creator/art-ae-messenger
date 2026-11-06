@@ -26,7 +26,7 @@ const forbidden=x=>/[\x00-\x1f\\]/.test(x)||x==='.'||x==='..'||x==='__proto__';
 const relative=x=>{
  if(typeof x!=='string'||x.length>500||x.startsWith('/')||x.endsWith('/')||x.includes('//'))throw Object.assign(Error('Некорректный путь'),{status:400});
  if(x==='')return '';
- if(x.split('/').includes('_artae_voice'))throw Object.assign(Error('Служебная папка'),{status:403});
+ if(x.split('/').some(part=>['_artae_voice','_artae_edit_staging'].includes(part)))throw Object.assign(Error('Служебная папка'),{status:403});
  const parts=x.split('/');
  if(parts.length>12||parts.some(p=>!p||p.length>120||forbidden(p)))throw Object.assign(Error('Недопустимый путь'),{status:400});
  return parts.join('/');
@@ -34,7 +34,7 @@ const relative=x=>{
 function folderName(x){
  if(typeof x!=='string')throw Object.assign(Error('Недопустимое имя'),{status:400});
  const s=x.trim();
- if(!s||s.length>100||/[\\/:*?"<>|\x00-\x1f]/.test(s)||s==='.'||s==='..'||(s==='_system'||s==='_artae_voice')||s.endsWith('.'))throw Object.assign(Error('Недопустимое имя папки'),{status:400});
+ if(!s||s.length>100||/[\\/:*?"<>|\x00-\x1f]/.test(s)||s==='.'||s==='..'||(s==='_system'||s==='_artae_voice'||s==='_artae_edit_staging')||s.endsWith('.'))throw Object.assign(Error('Недопустимое имя папки'),{status:400});
  return s;
 }
 function authEnv(){
@@ -69,7 +69,7 @@ function itemView(i,parent){
  // Resource paths returned by Yandex Disk may use a canonical namespace
  // rather than the app:/ alias used to make the request. Never compare them.
  // Build paths only from the current validated parent and safe direct-child name.
- if(!i||typeof i.name!=='string'||!i.name||i.name==='_artae_voice'||i.name.length>255||
+ if(!i||typeof i.name!=='string'||!i.name||(i.name==='_artae_voice'||i.name==='_artae_edit_staging')||i.name.length>255||
     i.name==='.'||i.name==='..'||/[\\/\x00-\x1f]/.test(i.name)||
     (i.type!=='dir'&&i.type!=='file'))return null;
  const relativePath=parent?parent+'/'+i.name:i.name;
@@ -78,7 +78,7 @@ function itemView(i,parent){
 }
 
 function fileName(x){
- if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||x.toLowerCase()==='_artae_voice'||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
+ if(typeof x!=='string'||x.length>120||x!==x.trim()||!x||(x.toLowerCase()==='_artae_voice'||x.toLowerCase()==='_artae_edit_staging')||/[\\/:*?"<>|\x00-\x1f]/.test(x)||x==='.'||x==='..'||x.endsWith('.'))throw Object.assign(Error('Недопустимое имя файла'),{status:400});
  return x;
 }
 function transferUrl(href){
@@ -237,12 +237,49 @@ export default async function handler(request){
    if(!rel||!/\.(docx|xlsx)$/i.test(rel)||typeof args.expectedModified!=='string'||!args.expectedModified||args.expectedModified.length>100)
     throw Object.assign(Error('Неверная версия документа'),{status:400});
    await requireOfficeLease(p.id,rel,args.editToken,session);
-   const full=apiPath(p.folder_path,rel);
-   const current=await disk('GET','/resources',{path:full,fields:'type,modified'});
-   if(current.type!=='file')throw Object.assign(Error('Документ не найден'),{status:404});
-   if(current.modified!==args.expectedModified)throw Object.assign(Error('Документ изменён другим участником. Обновите его перед сохранением.'),{status:409});
-   const link=await disk('GET','/resources/upload',{path:full,overwrite:'true'});
+   const current=await disk('GET','/resources',{path:apiPath(p.folder_path,rel),fields:'type,modified'});
+   if(current.type!=='file'||current.modified!==args.expectedModified)
+    throw Object.assign(Error('Документ изменён. Обновите его перед сохранением.'),{status:409});
+   const base=p.folder_path+'/_artae_edit_staging';
+   const dir=base+'/'+args.editToken;
+   for(const folder of [base,dir]){
+    try{await disk('PUT','/resources',{path:folder})}
+    catch(e){if(e.status!==409)throw e}
+   }
+   const stage=dir+'/pending'+(rel.toLowerCase().endsWith('.docx')?'.docx':'.xlsx');
+   const link=await disk('GET','/resources/upload',{path:stage,overwrite:'true'});
    return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
+  }
+  if(args.action==='officeSaveCommit'&&request.method==='POST'){
+   if(!rel||!/\.(docx|xlsx)$/i.test(rel)||typeof args.expectedModified!=='string'||!args.expectedModified||args.expectedModified.length>100)
+    throw Object.assign(Error('Неверная версия документа'),{status:400});
+   await requireOfficeLease(p.id,rel,args.editToken,session);
+   const final=apiPath(p.folder_path,rel);
+   const current=await disk('GET','/resources',{path:final,fields:'type,modified'});
+   if(current.type!=='file'||current.modified!==args.expectedModified)
+    throw Object.assign(Error('Документ изменён. Обновите его перед сохранением.'),{status:409});
+   const stage=p.folder_path+'/_artae_edit_staging/'+args.editToken+'/pending'+(rel.toLowerCase().endsWith('.docx')?'.docx':'.xlsx');
+   const staged=await disk('GET','/resources',{path:stage,fields:'type,size'});
+   if(staged.type!=='file'||!Number.isFinite(staged.size)||staged.size<1)
+    throw Object.assign(Error('Не найден подготовленный документ'),{status:400});
+   const operation=await disk('POST','/resources/move',{from:stage,path:final,overwrite:'true'});
+   // Yandex may schedule moving large files as an asynchronous operation.
+   if(operation?.href&&operation?.method){
+    const opUrl=transferUrl(operation.href);
+    for(let attempt=0;attempt<10;attempt++){
+     const progress=await transferFetch(opUrl.toString());
+     if(!progress.ok)throw Object.assign(Error('Операция сохранения на Яндекс Диске завершилась ошибкой'),{status:502});
+     const result=await progress.json();
+     if(result.status==='success')break;
+     if(result.status==='failed')throw Object.assign(Error('Не удалось заменить документ на Яндекс Диске'),{status:502});
+     if(attempt===9)throw Object.assign(Error('Сохранение ещё выполняется. Не закрывайте документ.'),{status:503});
+     await new Promise(done=>setTimeout(done,700));
+    }
+   }
+   const updated=await disk('GET','/resources',{path:final,fields:'type,modified,size'});
+   if(updated.type!=='file'||typeof updated.modified!=='string'||!updated.modified)
+    throw Object.assign(Error('Не удалось подтвердить сохранение'),{status:502});
+   return response({ok:true,modified:updated.modified,size:updated.size});
   }
   if(args.action==='uploadLink'&&request.method==='POST'){
    const name=fileName(args.name);
