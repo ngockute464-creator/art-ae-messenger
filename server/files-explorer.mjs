@@ -199,6 +199,16 @@ export default async function handler(request){
    if(typeof updated.modified!=='string')throw Object.assign(Error('Файл записан, но новая версия не подтверждена'),{status:502});
    return response({ok:true,modified:updated.modified,size:updated.size});
   }
+  if(args.action==='officeSaveLink'&&request.method==='POST'){
+   if(!rel||!/\.(docx|xlsx)$/i.test(rel)||typeof args.expectedModified!=='string'||!args.expectedModified||args.expectedModified.length>100)
+    throw Object.assign(Error('Неверная версия документа'),{status:400});
+   const full=apiPath(p.folder_path,rel);
+   const current=await disk('GET','/resources',{path:full,fields:'type,modified'});
+   if(current.type!=='file')throw Object.assign(Error('Документ не найден'),{status:404});
+   if(current.modified!==args.expectedModified)throw Object.assign(Error('Документ изменён другим участником. Обновите его перед сохранением.'),{status:409});
+   const link=await disk('GET','/resources/upload',{path:full,overwrite:'true'});
+   return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
+  }
   if(args.action==='uploadLink'&&request.method==='POST'){
    const name=fileName(args.name);
    const target=apiPath(p.folder_path,rel?rel+'/'+name:name);

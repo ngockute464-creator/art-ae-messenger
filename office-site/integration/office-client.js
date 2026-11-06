@@ -169,13 +169,30 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    void (async()=>{
     let ok=false,error='';
     try{
-     if(msg.blob.size>3*1024*1024)throw Error('Размер документа превышает лимит текущего редактора (3 МБ). Скачайте копию и загрузите через файловый проводник.');
      const query=new URLSearchParams({action:'officeSave',project:projectId,path,expectedModified:ctx.version});
-     const response=await fetch('/.netlify/functions/files-explorer?'+query,{
-      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream'},body:msg.blob
-     });
-     let result={};try{result=await response.json()}catch{}
-     if(!response.ok)throw Error(result.error||'Ошибка сохранения (HTTP '+response.status+')');
+     let result={};
+     if(msg.blob.size<=3*1024*1024){
+      const response=await fetch('/.netlify/functions/files-explorer?'+query,{
+       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream'},body:msg.blob
+      });
+      try{result=await response.json()}catch{}
+      if(!response.ok)throw Error(result.error||'Ошибка сохранения (HTTP '+response.status+')');
+     }else{
+      // Keep large binary bytes out of Netlify's body-size-limited Functions.
+      const auth=await fetch('/.netlify/functions/files-explorer',{
+       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({action:'officeSaveLink',project:projectId,path,expectedModified:ctx.version})
+      });
+      let signed={};try{signed=await auth.json()}catch{}
+      if(!auth.ok)throw Error(signed.error||'Не удалось подтвердить версию документа');
+      let uploaded;
+      try{uploaded=await fetch(signed.href,{method:signed.method||'PUT',body:msg.blob,credentials:'omit'})}
+      catch{throw Error('Браузер заблокировал запись большого документа в Яндекс Диск (CORS). Изменения остались в редакторе. Скачайте копию через меню «Файл».')}
+      if(!uploaded.ok)throw Error('Яндекс Диск не принял документ (HTTP '+uploaded.status+')');
+      const versionResponse=await fetch('/.netlify/functions/files-explorer?'+new URLSearchParams({action:'officeVersion',project:projectId,path}),{credentials:'same-origin',cache:'no-store'});
+      try{result=await versionResponse.json()}catch{}
+      if(!versionResponse.ok)throw Error(result.error||'Не удалось подтвердить новую версию');
+     }
      if(typeof result.modified!=='string'||!result.modified)throw Error('Сервер не подтвердил новую версию документа');
      ctx.version=result.modified;ok=true;state.textContent='Сохранено на Яндекс Диске';
      if(typeof explorerLoad==='function'&&projectId===project&&explorer?.path===path.split('/').slice(0,-1).join('/'))void explorerLoad(explorer.path);
@@ -228,11 +245,21 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    ctx.version=info.modified;
    const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project:projectId,path});
    const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
-   if(!response.ok){let details={};try{details=await response.json()}catch{}
-    throw Error(details.error||'Не удалось получить документ: HTTP '+response.status)}
-   blob=await response.blob();
+   if(response.status===413){
+    const signedResponse=await fetch('/.netlify/functions/files-explorer?'+new URLSearchParams({action:'downloadLink',project:projectId,path}),{credentials:'same-origin',cache:'no-store'});
+    let signed={};try{signed=await signedResponse.json()}catch{}
+    if(!signedResponse.ok)throw Error(signed.error||'Не удалось получить ссылку на большой документ');
+    let direct;
+    try{direct=await fetch(signed.href,{credentials:'omit',cache:'no-store'})}
+    catch{throw Error('Браузер не разрешил открыть большой документ с Яндекс Диска (CORS).')}
+    if(!direct.ok)throw Error('Яндекс Диск не выдал документ');
+    blob=await direct.blob();
+   }else{
+    if(!response.ok){let details={};try{details=await response.json()}catch{}
+     throw Error(details.error||'Не удалось получить документ: HTTP '+response.status)}
+    blob=await response.blob();
+   }
   }
-  if(blob.size>3*1024*1024)throw Error('Файл превышает лимит теста 3 МБ');
   if(active!==ctx)return;
   ctx.buffer=await blob.arrayBuffer();
   ctx.fileAt=performance.now();

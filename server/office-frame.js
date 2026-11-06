@@ -76,7 +76,7 @@ addEventListener('message',async event=>{
  if(msg.type!=='artae-office-open')return;
  if(!ready()){window.parent.postMessage({type:'artae-office-error',message:'Редактор ещё не готов'},origin);return}
  const expected=document.documentElement.dataset.app==='quire'?'.docx':'.xlsx';
- if(typeof msg.name!=='string'||!msg.name.toLowerCase().endsWith(expected)||!(msg.buffer instanceof ArrayBuffer)||msg.buffer.byteLength>3*1024*1024)return;
+ if(typeof msg.name!=='string'||!msg.name.toLowerCase().endsWith(expected)||!(msg.buffer instanceof ArrayBuffer))return;
  try{
   const file=new File([msg.buffer],msg.name,{type:expected==='.docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   await window.L.app.openFile(file);
