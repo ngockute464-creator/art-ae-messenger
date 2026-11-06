@@ -229,14 +229,14 @@ export default async function handler(request){
     // Small file compatibility path, within Netlify's binary response/request limit.
     await chatFolder(p.folder_path);
     const bytes=await readLimited(request.body);
-    const link=await disk('GET','/resources/upload',{path,overwrite:'true'});
+    const link=await disk('GET','/resources/upload',{path,overwrite:'false'});
     const r=await transferFetch(link.href,{method:link.method==='POST'?'POST':'PUT',body:bytes,headers:{'Content-Type':'application/octet-stream'}});
     if(!r.ok)throw Object.assign(Error('Не удалось сохранить вложение'),{status:502});
     return response({ok:true,fileId:args.fileId,name});
    }
    if(args.action==='chatUploadLink'&&request.method==='POST'){
     await chatFolder(p.folder_path);
-    const link=await disk('GET','/resources/upload',{path,overwrite:'true'});
+    const link=await disk('GET','/resources/upload',{path,overwrite:'false'});
     return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
    }
    if(args.action==='chatDownloadLink'&&request.method==='GET'){

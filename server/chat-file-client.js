@@ -1,5 +1,5 @@
 // Persistent chat files in !ФайлыИзЧатов, not the visible project explorer.
-const chatPendingFiles=new Map(),chatSending=new Set();
+const chatPendingFiles=new Map(),chatSending=new Set(),chatRequestIds=new Map();
 const chatFilePattern=/\[\[chatfile:v1:([0-9a-f-]{36}):([^:\]\r\n]{1,360}):(\d{1,15})\]\]/gi;
 function chatDraftItems(cid=convo){return chatPendingFiles.get(cid)||[]}
 function chatFileDraftHtml(){
@@ -12,6 +12,7 @@ function chatFilePick(){
   const chosen=[...input.files];input.remove();if(!chosen.length)return;
   const current=chatDraftItems(cid);
   if(current.length+chosen.length>10){alert('Не более 10 вложений в одном сообщении');return}
+  if(chosen.some(file=>file.name.length>120||file.name!==file.name.trim()||/[\\/:*?"<>|\x00-\x1f]/.test(file.name))){alert('Имя файла содержит недопустимые символы или слишком длинное');return}
   chatPendingFiles.set(cid,current.concat(chosen.map(file=>({id:crypto.randomUUID(),file,uploaded:false}))));
   if(convo===cid)render();
  },{once:true});
@@ -67,9 +68,10 @@ async function chatFileSend(event){
   const markers=items.map(item=>'[[chatfile:v1:'+item.id+':'+encodeURIComponent(item.file.name)+':'+item.file.size+']]').join('\n');
   const text=markers+(caption?'\n'+caption:'');
   if(text.length>6000)throw Error('Слишком много вложений или слишком длинное сообщение');
-  const result=await syncApi('send',{convo:cid,text,requestId:crypto.randomUUID()});
+  if(!chatRequestIds.has(cid))chatRequestIds.set(cid,crypto.randomUUID());
+  const result=await syncApi('send',{convo:cid,text,requestId:chatRequestIds.get(cid)});
   if(!result?.message?.id)throw Error('Не удалось подтвердить сообщение');
-  chatPendingFiles.delete(cid);const draft=drafts[cid];if(draft){draft.text='';draft.files=[]}
+  chatPendingFiles.delete(cid);chatRequestIds.delete(cid);const draft=drafts[cid];if(draft){draft.text='';draft.files=[]}
   if(!data.messages.some(m=>m.id===result.message.id))data.messages.push(result.message);
   if(convo===cid){render();syncMessages(true)}
  }catch(error){alert('Ошибка вложения: '+String(error?.message||error))}
@@ -93,7 +95,7 @@ root.addEventListener('click',event=>{
   event.preventDefault();event.stopImmediatePropagation();
   if(chatSending.has(convo))return;
   const items=chatDraftItems();items.splice(Number(remove.dataset.chatRemove),1);
-  if(!items.length)chatPendingFiles.delete(convo);render();return;
+  if(!items.length){chatPendingFiles.delete(convo);chatRequestIds.delete(convo)}render();return;
  }
  const open=event.target.closest('[data-chat-download]');
  if(open){event.preventDefault();event.stopImmediatePropagation();void chatFileOpen(open)}
