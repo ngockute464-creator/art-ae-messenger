@@ -104,12 +104,13 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
  const hint=document.createElement('span');hint.className='artaeOfficeHint';hint.textContent=mode==='preview'?'PDF-просмотр':localFile?'Локальная копия':'Сохранение → Яндекс Диск';
  const saveButton=document.createElement('button');saveButton.type='button';saveButton.textContent='Сохранить';saveButton.className='artaeOfficeSave';saveButton.hidden=mode!=='edit'||!!localFile;
  saveButton.addEventListener('click',()=>{
-  if(!active||active.saving)return;
+  if(!active||active.saving||active.savePreparing)return;
+  active.savePreparing=true;
   active.frame.contentWindow.postMessage({type:'artae-office-save-command'},location.origin);
  });
  const closeButton=document.createElement('button');closeButton.type='button';closeButton.textContent='Закрыть';closeButton.className='artaeOfficeClose';
  closeButton.addEventListener('click',()=>{
-  if(active?.saving){state.textContent='Сохранение выполняется. Закройте после завершения.';return;}
+  if(active?.saving||active?.savePreparing){state.textContent='Сохранение выполняется. Закройте после завершения.';return;}
   if(kind==='quire'){
    if(!active||active.closing)return;
    active.closing=true;
@@ -146,17 +147,18 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false};active=ctx;
+ const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false,savePreparing:false};active=ctx;
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer,remoteSave:mode==='edit'&&!localFile},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
   if(active!==ctx||event.origin!==location.origin||event.source!==frame.contentWindow)return;
   const msg=event.data;if(!msg||typeof msg.type!=='string')return;
+  if(msg.type==='artae-office-save-command-done'){ctx.savePreparing=false;return;}
   if(msg.type==='artae-office-save'){
    if(ctx.mode!=='edit'||localFile||ctx.saving||!ctx.version||!(msg.blob instanceof Blob)||msg.blob.size===0){
     frame.contentWindow.postMessage({type:'artae-office-save-result',requestId:msg.requestId,ok:false,error:'Сохранение недоступно'},location.origin);
     return;
    }
-   ctx.saving=true;state.textContent='Сохраняем на Яндекс Диск…';
+   ctx.savePreparing=false;ctx.saving=true;state.textContent='Сохраняем на Яндекс Диск…';
    void (async()=>{
     let ok=false,error='';
     try{

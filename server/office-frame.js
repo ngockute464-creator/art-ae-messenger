@@ -46,6 +46,7 @@ addEventListener('message',async event=>{
  if(msg.type==='artae-office-save-command'){
   try{if(!ready()||typeof window.L.app.save!=='function')throw Error('Сохранение недоступно');await window.L.app.save()}
   catch(error){window.parent.postMessage({type:'artae-office-error',message:String(error?.message||error)},origin)}
+  finally{window.parent.postMessage({type:'artae-office-save-command-done'},origin)}
   return;
  }
  if(msg.type==='artae-office-close'){
