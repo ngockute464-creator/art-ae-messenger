@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {mkdtempSync,existsSync,cpSync,rmSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-const parent=process.env.ARTAE_PARENT_ORIGIN;
+const parent=process.env.ARTAE_PARENT_ORIGIN||'https://netlify-preview--art-ae-messenger.netlify.app';
 if(!parent||new URL(parent).origin!==parent||new URL(parent).protocol!=='https:')throw Error('Set exact ARTAE_PARENT_ORIGIN HTTPS origin');
 const pin='2ee1000584945e69ee872cbd21ab2f8bd7a80d8d';
 const tmp=mkdtempSync(join(tmpdir(),'artae-isolated-office-')),repo=join(tmp,'VibeOffice'),out='office-site/dist';

@@ -1,22 +1,13 @@
+# OFFICE BRANCH ONLY. Netlify branch deploy must be enabled in existing project.
 [build]
-  command = "unzip -oq artae.zip -d . && node build/prepare.mjs"
-  publish = "public"
-  functions = "netlify/functions"
+  command = "node office-site/build.mjs"
+  publish = "office-site/dist"
 
-[[headers]]
-  for = "/storage-test.html"
-  [headers.values]
-    Cache-Control = "no-store"
-
-# This branch is intended for private QA, not search indexing.
 [[headers]]
   for = "/*"
   [headers.values]
     X-Robots-Tag = "noindex"
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"
 
-# Always serve the build metadata from the network so installed PWA clients
-# can compare their shell version without caching stale release information.
-[[headers]]
-  for = "/app-version.json"
-  [headers.values]
-    Cache-Control = "no-store, max-age=0"
+# No functions, no Supabase/Yandex environment variables.
