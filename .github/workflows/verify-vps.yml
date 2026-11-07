@@ -44,6 +44,7 @@ jobs:
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
           node migration/tests/test-pwa-update.mjs
+          node migration/tests/test-pwa-runtime.mjs
           node migration/tests/check-ui-markup.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
