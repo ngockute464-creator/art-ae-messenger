@@ -10,24 +10,40 @@ async function request(action,body){
  const opts=body?{method:'POST',credentials:'same-origin',cache:'no-store',
   headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...body})}:
   {credentials:'same-origin',cache:'no-store'};
- const res=await fetch(API+(body?'':'?'+new URLSearchParams({action,...(action==='status'?{endpoint:request.endpoint}: {})})),opts);
- const json=await res.json().catch(()=>({}));
- if(!res.ok)throw Error(json.error||'Ошибка Push ('+res.status+')');
- return json;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),9000);
+ try{
+  const res=await fetch(API+(body?'':'?'+new URLSearchParams({action,...(action==='status'?{endpoint:request.endpoint}: {})})),
+   {...opts,signal:controller.signal});
+  const json=await res.json().catch(()=>({}));
+  if(!res.ok)throw Error(json.error||'Ошибка Push (HTTP '+res.status+')');
+  return json;
+ }catch(error){
+  if(error?.name==='AbortError')throw Error('Push API не ответил за 9 секунд');
+  throw error;
+ }finally{clearTimeout(timeout)}
 }
 function keyBytes(base64){
  const base=base64.replace(/-/g,'+').replace(/_/g,'/');
  const raw=atob(base.padEnd(Math.ceil(base.length/4)*4,'='));
  return Uint8Array.from(raw,ch=>ch.charCodeAt(0));
 }
-async function registration(){
+async function registration(create=false){
+ // getRegistration() works without a controlling worker. ready may never resolve
+ // if installation failed, so never await ready in the status-checking UI.
  let reg=await navigator.serviceWorker.getRegistration();
- if(!reg)reg=await navigator.serviceWorker.register('/sw.js');
- return navigator.serviceWorker.ready;
+ if(!reg&&create)reg=await navigator.serviceWorker.register('/sw.js');
+ if(!reg)return null;
+ if(!create||reg.active)return reg;
+ return Promise.race([
+  navigator.serviceWorker.ready,
+  new Promise((_,reject)=>setTimeout(()=>reject(Error(
+   'Service Worker не активировался. Закройте и снова откройте PWA.')),10000))
+ ]);
 }
 async function currentSubscription(){
- const reg=await registration();
- return reg.pushManager.getSubscription();
+ const reg=await registration(false);
+ return reg?.active?reg.pushManager.getSubscription():null;
 }
 function mountPush(panel){
  const label=document.createElement('p');label.className='artaePwaSmall';
@@ -40,75 +56,100 @@ function mountPush(panel){
  enable.textContent='Включить';disable.textContent='Выключить';test.textContent='Тест';
  panel.append(row);
  let enabled=false,config=null,busy=false;
+ function stateButtons(){
+  const canUse=!!config?.enabled;
+  enable.hidden=enabled;
+  disable.hidden=!enabled;
+  test.hidden=!enabled;
+  enable.disabled=busy||!canUse;
+  disable.disabled=busy||!enabled;
+  test.disabled=busy||!enabled;
+ }
  async function sync(){
   if(busy)return;
   if(!supported()){
-   status.textContent='Уведомления не поддерживаются этим браузером.';
+   status.textContent='Этот браузер не поддерживает системные Push-уведомления.';
    row.hidden=true;return;
   }
   if(isIOS()&&!standalone()){
-   status.textContent='На iPhone сначала добавьте АРТ-АЕ на экран «Домой» и откройте его оттуда.';
+   status.textContent='На iPhone добавьте АРТ-АЕ на экран «Домой» и откройте оттуда.';
    row.hidden=true;return;
   }
-  row.hidden=false;enable.disabled=true;disable.disabled=true;test.disabled=true;
+  row.hidden=false;
+  status.textContent='Проверяем поддержку уведомлений…';
+  // Keep the opt-in control responsive while the server and worker are checked.
+  enable.disabled=false;disable.disabled=true;test.disabled=true;
   try{
    config=await request('config');
-   if(!config.enabled){status.textContent='Push ещё не настроен на сервере';return}
-   const sub=await currentSubscription();
+   if(!config.enabled){
+    status.textContent='Сервер ещё не активировал Push. Проверьте VAPID в systemd.';
+    return;
+   }
+   const sub=await Promise.race([
+    currentSubscription(),
+    new Promise((_,reject)=>setTimeout(()=>reject(Error(
+     'Не удалось проверить Service Worker за 8 секунд')),8000))
+   ]);
    if(sub){
     request.endpoint=sub.endpoint;
-    enabled=(await request('status')).subscribed;
+    enabled=!!(await request('status')).subscribed;
    }else enabled=false;
    status.textContent=enabled?'Уведомления включены':'Уведомления выключены';
-   enable.hidden=enabled;disable.hidden=!enabled;test.hidden=!enabled;
-  }catch(error){status.textContent=String(error.message||error)}
-  finally{enable.disabled=false;disable.disabled=false;test.disabled=false}
+  }catch(error){
+   status.textContent='Проверка Push: '+String(error?.message||error);
+  }finally{if(!busy)stateButtons()}
  }
  async function enablePush(){
   if(busy)return;
-  busy=true;enable.disabled=true;
+  busy=true;
+  stateButtons();
   try{
    if(!supported())throw Error('Браузер не поддерживает Push');
-   // Request browser permission directly from the click handler for iOS.
+   // Prompt immediately on the user click (mandatory for iOS).
    const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
    if(permission!=='granted')throw Error('Разрешение на уведомления не предоставлено');
    config=config?.publicKey?config:await request('config');
-   if(!config.publicKey)throw Error('Сервер не настроен');
-   const reg=await registration();
+   if(!config.publicKey)throw Error('На сервере отсутствует открытый VAPID-ключ');
+   status.textContent='Подключаем устройство…';
+   const reg=await registration(true);
+   if(!reg)throw Error('Не удалось зарегистрировать Service Worker');
    const subscription=(await reg.pushManager.getSubscription())||
     await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(config.publicKey)});
    await request('subscribe',{subscription:subscription.toJSON()});
-   status.textContent='Уведомления включены';enabled=true;
-  }catch(error){status.textContent=String(error.message||error);enabled=false}
+   status.textContent='Уведомления включены';
+   enabled=true;
+  }catch(error){status.textContent=String(error?.message||error)}
   finally{
-   busy=false;enable.disabled=false;enable.hidden=enabled;disable.hidden=!enabled;test.hidden=!enabled;
+   busy=false;
+   stateButtons();
   }
  }
  async function disablePush(){
   if(busy)return;
-  busy=true;
+  busy=true;stateButtons();
   try{
    const sub=await currentSubscription();
    if(sub){
     await request('unsubscribe',{endpoint:sub.endpoint});
     await sub.unsubscribe();
    }
-   enabled=false;status.textContent='Уведомления выключены';
-  }catch(error){status.textContent=String(error.message||error)}
-  finally{busy=false;enable.hidden=enabled;disable.hidden=!enabled;test.hidden=!enabled}
+   enabled=false;
+   status.textContent='Уведомления выключены';
+  }catch(error){status.textContent=String(error?.message||error)}
+  finally{busy=false;stateButtons()}
  }
  async function testPush(){
   if(busy)return;
-  busy=true;test.disabled=true;
+  busy=true;stateButtons();
   try{
    const sub=await currentSubscription();
    if(!sub)throw Error('Уведомления выключены');
    await request('test',{subscription:sub.toJSON()});
    status.textContent='Тест отправлен — проверьте системные уведомления';
-  }catch(error){status.textContent=String(error.message||error)}
-  finally{busy=false;test.disabled=false}
+  }catch(error){status.textContent=String(error?.message||error)}
+  finally{busy=false;stateButtons()}
  }
- enable.addEventListener('click',enablePush);
+ enable.addEventListener('click',()=>{void enablePush()});
  disable.addEventListener('click',()=>{void disablePush()});
  test.addEventListener('click',()=>{void testPush()});
  void sync();
