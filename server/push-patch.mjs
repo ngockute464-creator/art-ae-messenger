@@ -19,8 +19,12 @@ const route=String.raw`
 window.ARTAE_OPEN_PUSH_CONVERSATION=id=>{
  try{
   if(!syncReady||!data.convos.some(c=>c.id===id))return false;
-  // Don't switch conversations while a draft, modal, voice or Office is active.
-  if(typeof window.ARTAE_CAN_AUTO_RELOAD==='function'&&!window.ARTAE_CAN_AUTO_RELOAD())return false;
+  // Keep persistent text drafts; defer navigation only during active edits/uploads.
+  if((typeof editing!=='undefined'&&editing)||(typeof modal!=='undefined'&&modal)||
+     (typeof voiceDraft!=='undefined'&&voiceDraft)||
+     (typeof chatSending!=='undefined'&&chatSending.size)||
+     (typeof explorerUploading!=='undefined'&&explorerUploading)||
+     document.querySelector('.artaeOfficeOverlay,.artaeOfficeWarmActive,.messageEdit'))return false;
   const found=data.convos.find(c=>c.id===id);
   project=found.project;
   openChat(found.id);
