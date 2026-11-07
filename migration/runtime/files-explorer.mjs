@@ -181,6 +181,25 @@ async function requireOfficeLease(projectId,rel,token,session){
 
 
 const CHAT_FILES='!ФайлыИзЧатов';
+// Validate both the chat membership and the actual committed attachment marker
+// before copying. A file UUID by itself is not proof of ownership.
+async function requireChatAttachmentMessage(convo,messageId,fileId,name){
+ if(!uuid(messageId))throw Object.assign(Error('Недопустимое сообщение'),{status:400});
+ const {rows:[m]}=await query('SELECT body FROM public.artae_messages WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL',[messageId,convo]);
+ if(!m)throw Object.assign(Error('Сообщение не найдено'),{status:404});
+ const markers=String(m.body||'').matchAll(/\[\[chatfile:v1:([0-9a-f-]{36}):([^:\]\r\n]{1,360}):(\d{1,15})\]\]/gi);
+ for(const mark of markers){
+  if(mark[1].toLowerCase()!==fileId.toLowerCase())continue;
+  try{if(decodeURIComponent(mark[2])===name)return}catch{}
+ }
+ throw Object.assign(Error('Вложение не принадлежит сообщению'),{status:403});
+}
+function chatCopyOperation(href){
+ const link=transferUrl(href),match=link.pathname.match(/^\/v1\/disk\/operations\/([a-zA-Z0-9_-]{6,128})$/);
+ if(!match)throw Object.assign(Error('Некорректная операция Яндекс Диска'),{status:502});
+ return match[1];
+}
+
 const chatFileToken=x=>typeof x==='string'&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(x);
 async function chatConvoProject(convo,projectId){
  if(!uuid(convo))throw Object.assign(Error('Неверный разговор'),{status:400});
@@ -215,11 +234,11 @@ export default async function handler(request){
   // until the operator deliberately enables writes for the next app.
   if(process.env.ARTAE_NEXT_ALLOW_DISK_WRITES!=='1' && [
     'chatUpload','chatUploadLink','officeEditAcquire','officeEditRenew','officeEditRelease',
-    'officeSave','officeSaveLink','officeSaveCommit','uploadLink','upload','delete','mkdir'
+    'officeSave','officeSaveLink','officeSaveCommit','uploadLink','upload','delete','mkdir','chatCopyToProject'
   ].includes(args.action))return response({error:'Запись на Яндекс Диск для новой системы пока отключена'},503);
   const p=await project(args.project);
   const rel=relative(args.path||'');
-  if(['chatUpload','chatUploadLink','chatDownloadLink'].includes(args.action)){
+  if(['chatUpload','chatUploadLink','chatDownloadLink','chatCopyToProject'].includes(args.action)){
    await chatConvoProject(args.convo,p.id);
    const name=fileName(args.name),object=chatObjectName(args.fileId,name);
    const path=p.folder_path+'/'+CHAT_FILES+'/'+object;
@@ -238,11 +257,41 @@ export default async function handler(request){
     return response({href:transferUrl(link.href).toString(),method:link.method==='POST'?'POST':'PUT'});
    }
    if(args.action==='chatDownloadLink'&&request.method==='GET'){
-    const metadata=await disk('GET','/resources',{path,fields:'type,size'});
+    const metadata=await disk('GET','/resources',{path,fields:'type,size,mime_type'});
     if(metadata.type!=='file')throw Object.assign(Error('Вложение не найдено'),{status:404});
     const link=await disk('GET','/resources/download',{path});
-    return response({href:transferUrl(link.href).toString(),name,size:metadata.size});
+    return response({href:transferUrl(link.href).toString(),name,size:metadata.size,mimeType:metadata.mime_type||''});
    }
+   if(args.action==='chatCopyToProject'&&request.method==='POST'){
+    await requireChatAttachmentMessage(args.convo,args.messageId,args.fileId,name);
+    const targetName=fileName(args.targetName),targetRel=rel?rel+'/'+targetName:targetName;
+    const destination=apiPath(p.folder_path,rel);
+    const [source,folder]=await Promise.all([
+     disk('GET','/resources',{path,fields:'type,size'}),
+     disk('GET','/resources',{path:destination,fields:'type'})
+    ]);
+    if(source.type!=='file')throw Object.assign(Error('Исходный файл не найден'),{status:404});
+    if(folder.type!=='dir')throw Object.assign(Error('Выберите папку проекта'),{status:400});
+    // No download, recompression, transcoding or implicit overwrite.
+    const copied=await disk('POST','/resources/copy',{
+     from:path,path:apiPath(p.folder_path,targetRel),overwrite:'false'
+    });
+    let operationId=null;
+    if(copied?.href){
+     let href;try{href=new URL(copied.href)}catch{}
+     if(href?.pathname?.includes('/operations/'))operationId=chatCopyOperation(copied.href);
+    }
+    return response({ok:true,done:!operationId,path:targetRel,
+     operationId:operationId||undefined,name:targetName},operationId?202:200);
+   }
+  }
+
+  if(args.action==='chatCopyStatus'&&request.method==='POST'){
+   if(typeof args.operationId!=='string'||!/^[a-zA-Z0-9_-]{6,128}$/.test(args.operationId))
+    throw Object.assign(Error('Недопустимая операция'),{status:400});
+   const operation=await disk('GET','/operations/'+args.operationId);
+   if(operation.status==='failed')throw Object.assign(Error('Копирование не удалось'),{status:502});
+   return response({ok:true,done:operation.status==='success'});
   }
 
   if(['officeEditAcquire','officeEditRenew','officeEditRelease'].includes(args.action)&&request.method==='POST'){
