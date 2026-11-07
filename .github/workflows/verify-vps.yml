@@ -61,6 +61,7 @@ jobs:
           node migration/tests/test-pwa-runtime.mjs
           node migration/tests/check-ui-markup.mjs
           node migration/tests/test-mobile-composer-voice.mjs
+          node migration/tests/test-mobile-composer-interactions.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
           node --check migration/runtime/unread.mjs
