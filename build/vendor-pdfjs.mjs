@@ -5,8 +5,8 @@ import {createHash} from 'node:crypto';
 const VERSION='6.5.438';
 const OUT='public/vendor/pdfjs';
 const ASSETS=[
- {name:'pdf.mjs',min:350000,max:4000000,expectedSha256:null},
- {name:'pdf.worker.mjs',min:600000,max:7000000,expectedSha256:null}
+ {name:'pdf.mjs',min:350000,max:4000000,expectedSha256:'2792b7c390ad6d5f4245d326b70deebbc990fa4bcac691412f6df886abb9e867'},
+ {name:'pdf.worker.mjs',min:600000,max:7000000,expectedSha256:'8336aabf764cb08c818555a2fd2545e4fed10837146de927564875c93b3c4f83'}
 ];
 const providers=[
  name=>'https://cdn.jsdelivr.net/npm/pdfjs-dist@'+VERSION+'/legacy/build/'+name,

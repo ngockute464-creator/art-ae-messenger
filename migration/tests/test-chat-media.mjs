@@ -16,7 +16,7 @@ assert.match(explorer,/save\.textContent='В файлы проекта'/);
 assert.match(api,/\/resources\/copy/);
 assert.match(api,/overwrite:'false'/);
 assert.match(api,/requireChatAttachmentMessage/);
-assert.match(api,/args.action==='chatMedia'/);
+assert.match(api,/\['chatMedia','chatMediaDownload'\]\.includes\(args.action\)/);
 assert.match(api,/new Response\(upstream.body/);
 assert.match(explorer,/signedUrl=chatMediaStreamUrl\(chatSource\)/);
 assert.match(client,/media.src=button.dataset.chatKind==='video'/);
