@@ -312,3 +312,7 @@ async function explorerPdfDocumentViewer(body,url,dialog){
   status.textContent='Не удалось открыть PDF: '+String(error?.message||error);
  }
 }
+
+// Public bridge for bundled and standalone Office clients. Reuses exactly
+// the same local PDF.js controls as ordinary project PDF files.
+window.ARTAE_PDF_RENDER=explorerPdfDocumentViewer;
