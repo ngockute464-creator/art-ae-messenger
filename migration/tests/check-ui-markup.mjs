@@ -11,3 +11,11 @@ for(const needle of [
  console.log('ARTAE_UI_MARKER',JSON.stringify(needle),'index=',index,
   index>=0?JSON.stringify(app.slice(Math.max(0,index-110),index+230)):'NOT_FOUND');
 }
+
+
+const messagesAt=app.indexOf('function messageView(m)');
+const sidebarAt=app.indexOf('function sidebar(){');
+const navAt=app.indexOf('function convoNav(){');
+console.log('ARTAE_UI_SIDEBAR',JSON.stringify(app.slice(sidebarAt,sidebarAt+650)));
+console.log('ARTAE_UI_CONVOS',JSON.stringify(app.slice(navAt,navAt+850)));
+console.log('ARTAE_UI_MESSAGE',JSON.stringify(app.slice(messagesAt,messagesAt+4600)));
