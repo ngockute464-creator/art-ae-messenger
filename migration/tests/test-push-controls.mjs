@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 
 const code=readFileSync('public/push-client.js','utf8');
 const pub=Buffer.alloc(65,1).toString('base64url');
-const flush=async()=>{for(let i=0;i<120;i++)await Promise.resolve()};
+const flush=async()=>{for(let cycle=0;cycle<5;cycle++){for(let i=0;i<120;i++)await Promise.resolve();await new Promise(resolve=>setImmediate(resolve))}};
 async function scenario(hang){
  const requests=[];
  const element=tag=>({
@@ -36,7 +36,7 @@ async function scenario(hang){
   URL,URLSearchParams,Uint8Array,AbortController,
   atob:s=>Buffer.from(s,'base64').toString('binary'),
   location:{href:'https://artae.example/'},history:{replaceState(){}},
-  setTimeout(fn,ms){if(ms===8000)queueMicrotask(fn);return 1},
+  setTimeout(fn,ms){if(ms===8000)setImmediate(fn);return 1},
   clearTimeout(){},setInterval(){},
   fetch:async(uri,options)=>{
    const method=options?.method||'GET';
