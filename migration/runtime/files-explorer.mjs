@@ -221,7 +221,7 @@ const CHAT_MEDIA_MIMES=Object.freeze({
  heic:'image/heic',heif:'image/heif',
  mp4:'video/mp4',m4v:'video/mp4',webm:'video/webm',
  mov:'video/quicktime',ogv:'video/ogg', '3gp':'video/3gpp',
- mkv:'video/x-matroska',avi:'video/x-msvideo'
+ mkv:'video/x-matroska',avi:'video/x-msvideo',pdf:'application/pdf'
 });
 function chatMediaMime(name){
  const ext=name.slice(name.lastIndexOf('.')+1).toLowerCase();
@@ -234,7 +234,7 @@ function chatObjectName(id,name){
 
 // Stream the original Yandex Disk resource via the authenticated API.
 // Seek and Content-Length work alike in chats and in project folders.
-async function streamProjectMedia(request,path,name){
+async function streamProjectMedia(request,path,name,download=false){
 const mime=chatMediaMime(name);
 if(!mime)throw Object.assign(Error('Формат не поддерживает предпросмотр'),{status:415});
 const source=await disk('GET','/resources',{path,fields:'type,size'});
@@ -244,8 +244,8 @@ if(!Number.isSafeInteger(fullSize)||fullSize<0)
  throw Object.assign(Error('Недопустимый размер файла'),{status:502});
 if(request.method==='HEAD'){
  return new Response(null,{status:200,headers:{
-  'Content-Type':mime,'Content-Length':String(fullSize),
-  'Accept-Ranges':'bytes','Content-Disposition':'inline',
+  'Content-Type':download?'application/octet-stream':mime,'Content-Length':String(fullSize),
+  'Accept-Ranges':'bytes','Content-Disposition':download?"attachment; filename*=UTF-8''"+encodeURIComponent(name):'inline',
   'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'
  }});
 }
@@ -266,8 +266,8 @@ if(![200,206].includes(upstream.status)||!upstream.body){
  throw Object.assign(Error('Не удалось получить медиафайл'),{status:upstream.status===404?404:502});
 }
 const headers=new Headers({
- 'Content-Type':mime,
- 'Content-Disposition':'inline',
+ 'Content-Type':download?'application/octet-stream':mime,
+ 'Content-Disposition':download?"attachment; filename*=UTF-8''"+encodeURIComponent(name):'inline',
  'Cache-Control':'private, no-store',
  'X-Content-Type-Options':'nosniff',
  'Accept-Ranges':'bytes'
@@ -301,7 +301,7 @@ return new Response(upstream.body,{status:upstream.status,headers});
 
 export default async function handler(request){
  if(!['GET','POST','HEAD'].includes(request.method)||
-    (request.method==='HEAD'&& !['chatMedia','projectMedia'].includes(new URL(request.url).searchParams.get('action'))))
+    (request.method==='HEAD'&& !['chatMedia','projectMedia','chatMediaDownload','projectMediaDownload'].includes(new URL(request.url).searchParams.get('action'))))
   return response({error:'Method not allowed'},405);
  if(request.method==='POST'&&!isOrigin(request))return response({error:'Недопустимый запрос'},403);
  try{
@@ -321,7 +321,7 @@ export default async function handler(request){
   ].includes(args.action))return response({error:'Запись на Яндекс Диск для новой системы пока отключена'},503);
   const p=await project(args.project);
   const rel=relative(args.path||'');
-  if(['chatUpload','chatUploadLink','chatDownloadLink','chatCopyToProject','chatMedia'].includes(args.action)){
+  if(['chatUpload','chatUploadLink','chatDownloadLink','chatCopyToProject','chatMedia','chatMediaDownload'].includes(args.action)){
    await chatConvoProject(args.convo,p.id);
    const name=fileName(args.name),object=chatObjectName(args.fileId,name);
    const path=p.folder_path+'/'+CHAT_FILES+'/'+object;
@@ -345,9 +345,9 @@ export default async function handler(request){
     const link=await disk('GET','/resources/download',{path});
     return response({href:transferUrl(link.href).toString(),name,size:metadata.size,mimeType:metadata.mime_type||''});
    }
-   if(args.action==='chatMedia'&&['GET','HEAD'].includes(request.method)){
+   if(['chatMedia','chatMediaDownload'].includes(args.action)&&['GET','HEAD'].includes(request.method)){
     await requireChatAttachmentMessage(args.convo,args.messageId,args.fileId,name);
-    return streamProjectMedia(request,path,name);
+    return streamProjectMedia(request,path,name,args.action==='chatMediaDownload');
    }
    if(args.action==='chatCopyToProject'&&request.method==='POST'){
     await requireChatAttachmentMessage(args.convo,args.messageId,args.fileId,name);
@@ -375,11 +375,11 @@ export default async function handler(request){
 
   // Project files stream from the same-origin API. Never fetch an entire
   // signed Yandex download into a browser Blob just to play a video.
-  if(args.action==='projectMedia'&&['GET','HEAD'].includes(request.method)){
+  if(['projectMedia','projectMediaDownload'].includes(args.action)&&['GET','HEAD'].includes(request.method)){
    if(!rel)throw Object.assign(Error('Выберите файл'),{status:400});
    const name=fileName(rel.split('/').at(-1));
    if(!chatMediaMime(name))throw Object.assign(Error('Формат не поддерживает предпросмотр'),{status:415});
-   return streamProjectMedia(request,apiPath(p.folder_path,rel),name);
+   return streamProjectMedia(request,apiPath(p.folder_path,rel),name,args.action==='projectMediaDownload');
   }
 
   if(args.action==='chatCopyStatus'&&request.method==='POST'){
