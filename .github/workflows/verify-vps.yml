@@ -1,0 +1,50 @@
+name: Verify ART-AE VPS release
+
+on:
+  push:
+    branches: [netlify-preview]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-vps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Assemble release
+        run: |
+          set -euo pipefail
+          unzip -oq artae.zip -d .
+          node build/prepare.mjs
+
+      - name: Validate app and server modules
+        run: |
+          set -euo pipefail
+          test -s public/index.html
+          test -s public/sw.js
+          test -s public/app.js
+          node --check public/app.js
+          node --check vps-server.mjs
+          for module in auth sync pins files-explorer realtime-token voice voice-transcript; do
+            test -f "netlify/functions/$module.mjs"
+            node --check "netlify/functions/$module.mjs"
+          done
+
+      - name: Check deployment script syntax
+        run: bash -n deploy/artae-release.sh
