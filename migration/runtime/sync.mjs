@@ -206,11 +206,14 @@ export default async function handler(req) {
       const stamp=Math.max(now(),(revision||0)+1);
       const value=action==='edit'?clean(body.text,6000):null;
       if(action==='edit'&&!value)return reply({error:'Сообщение не может быть пустым'},400);
+      const isEdit=action==='edit';
       const {rows:[updated]}=await query(
-        action==='edit'?
+        isEdit?
           'UPDATE public.artae_messages SET body=$4,edited_at=$5 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *':
-          'UPDATE public.artae_messages SET deleted_at=$5 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *',
-        [body.id,body.convo,session.user.id,value,stamp,revision]
+          'UPDATE public.artae_messages SET deleted_at=$4 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $5::bigint RETURNING *',
+        isEdit?
+          [body.id,body.convo,session.user.id,value,stamp,revision]:
+          [body.id,body.convo,session.user.id,stamp,revision]
       );
       if(!updated)return reply({error:'Сообщение уже изменено'},409);
       return reply({message:messageView(updated)});
