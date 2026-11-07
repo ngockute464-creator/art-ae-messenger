@@ -43,6 +43,15 @@ jobs:
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
+          node --check server/push-client.js
+          node --check server/push-patch.mjs
+          node --check public/push-client.js
+          node --check migration/runtime/push.mjs
+          node --check migration/runtime/push-worker.mjs
+          node --check migration/runtime/push-transport.mjs
+          grep -q "artaePushControls" public/push-client.js
+          grep -q "ARTAE_PUSH_OPEN" public/sw.js
+          grep -q "artae_push_deliveries" migration/runtime/sync.mjs
           node migration/tests/test-pwa-update.mjs
           node migration/tests/test-pwa-runtime.mjs
           node migration/tests/check-ui-markup.mjs
