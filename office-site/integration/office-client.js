@@ -118,7 +118,7 @@ function finishDocxClose(ctx){
  disposeOfficePdf(ctx);
  const host=ctx.overlay;
  host.querySelectorAll('.artaeOfficePdfHost').forEach(el=>el.remove());
- ctx.frame.style.display='';
+ ctx.frame.style.display='';ctx.frame.style.visibility='';
  // The iframe never leaves its DOM parent; closing Quire resets to a fresh
  // blank document before we hide it. Keep the ready engine for the next DOCX.
  const header=host.querySelector('.artaeOfficeTop');
@@ -198,6 +198,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
  }
  const frame=warm?.frame||makeOfficeFrame(kind,name);
  frame.title='VibeOffice — '+name;
+ if(mode==='preview')frame.style.visibility='hidden';
  if(warm){
   // Reparenting an iframe can destroy its browsing context and start it again.
   // Keep the already-running frame in its original container.
@@ -268,6 +269,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    send();
   }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · файл '+(fileReady/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');if(ctx.mode==='preview'){
     if(msg.readonly!==true){frame.style.display='none';state.textContent='Ошибка: режим чтения не подтверждён';return}
+    frame.style.visibility='';
     state.textContent='Оригинал открыт · только чтение';
     try{closeButton.focus({preventScroll:true})}catch{closeButton.focus()}
    }console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
@@ -312,7 +314,10 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    if(msg.closed)finishDocxClose(ctx);
    else state.textContent=msg.error?'Ошибка закрытия: '+String(msg.error).slice(0,140):'Закрытие отменено';
   }
-  else if(msg.type==='artae-office-error')state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
+  else if(msg.type==='artae-office-error'){
+    state.textContent='Ошибка: '+String(msg.message||'Не удалось открыть').slice(0,200);
+    if(ctx.mode==='preview'&&frame.style.visibility==='hidden')frame.style.display='none';
+   }
  };
  window.addEventListener('message',ctx.message);
  if(!warm)document.body.append(overlay);

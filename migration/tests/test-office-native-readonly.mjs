@@ -133,6 +133,8 @@ for(const p of ['server/office-client.js','office-site/integration/office-client
  const client=readFileSync(p,'utf8');
  assert.match(client,/readonly:mode==='preview'/);
  assert.match(client,/msg\.readonly!==true/);
+ assert.match(client,/if\(mode==='preview'\)frame\.style\.visibility='hidden'/);
+ assert.match(client,/frame\.style\.visibility='';/);
  assert.match(client,/Оригинал открыт · только чтение/);
  assert.doesNotMatch(client,/if\(ctx\.mode==='preview'\)\{state\.textContent='Создаём PDF…'/);
  assert.match(client,/mode==='edit'&&!localFile/,'Edit still requires its lease');
