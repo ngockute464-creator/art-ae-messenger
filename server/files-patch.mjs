@@ -371,4 +371,23 @@ css+='\n'+String.raw`
  .projectFileTypeIcon svg{width:20px;height:20px}
 }
 `;
+css+='\n'+String.raw`
+/* PDF continuous reading: normal wheel/touch scrolling with capped canvases. */
+.artaePdfModeButton{white-space:nowrap;min-width:74px}
+.artaePdfModeButton[aria-pressed="true"]{background:rgba(77,122,204,.14);border-color:#7b9acb}
+.artaePdfViewport{position:relative;overscroll-behavior:contain}
+.artaePdfViewport.artaePdfContinuous{scroll-behavior:auto;touch-action:pan-x pan-y}
+.artaePdfSheet{box-sizing:border-box;display:flex;flex-direction:column;
+ align-items:center;justify-content:flex-start;width:max-content;min-width:100%;
+ padding:4px 6px 12px;margin:0 0 12px;background:rgba(255,255,255,.4);
+ border-radius:5px;position:static}
+.artaePdfSheetLabel{align-self:flex-start;margin:0 0 6px 4px;
+ color:#697587;font-size:11px;line-height:20px;white-space:nowrap}
+.artaePdfSheet .artaePdfCanvas{margin:0 auto;flex:none;max-width:none}
+@media(max-width:650px){
+ .artaePdfModeButton{min-width:70px;padding:5px 8px}
+ .artaePdfSheet{margin-bottom:9px;padding:3px 3px 9px}
+ .artaePdfSheetLabel{margin-left:3px}
+}
+`;
 writeFileSync(cssFile,css);
