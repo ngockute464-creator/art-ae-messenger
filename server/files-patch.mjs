@@ -16,9 +16,10 @@ const composerClient=readFileSync('server/composer-controls.js','utf8');
 const voiceClient=readFileSync('server/voice-client.js','utf8');
 const transcriptClient=readFileSync('server/transcript-client.js','utf8');
 const chatFileClient=readFileSync('server/chat-file-client.js','utf8');
+const chatMediaClient=readFileSync('server/chat-media-client.js','utf8');
 const messageMenuClient=readFileSync('server/message-menu-client.js','utf8');
 const focusGuardClient=readFileSync('server/composer-focus-guard.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\nfunction cp(){','client and resize functions');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+chatMediaClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -235,5 +236,34 @@ css+='\n'+String.raw`
 .composeLine.voice-canceling>.voiceHoldStatus .voiceHoldHint{color:#d02b41}
 .composeLine.voice-canceling>.voiceMic{background:#d02b41;border-color:#d02b41}
 @media(max-width:650px){.composeLine>.voiceHoldStatus{gap:6px}.voiceHoldHint{font-size:12px}}
+`;
+css+='\n'+String.raw`
+/* Media previews fit the chat; originals remain at full resolution on Disk. */
+.chatStoredFiles{align-items:stretch!important;max-width:100%}
+.chatMediaThumb{display:flex;position:relative;flex-direction:column;align-items:stretch;overflow:hidden;width:min(380px,100%);max-width:100%;padding:0;border:1px solid #dce3ee;border-radius:12px;color:inherit;background:var(--surface,#fff);cursor:pointer;text-align:left}
+.chatMediaVisual{display:flex;position:relative;min-height:105px;max-height:260px;align-items:center;justify-content:center;overflow:hidden;background:#edf2f8}
+.chatMediaThumb[data-chat-kind="video"] .chatMediaVisual{background:#1c273a}
+.chatMediaVisual img,.chatMediaVisual video{display:block;width:100%;height:auto;max-height:260px;object-fit:contain}
+.chatMediaVisual video{aspect-ratio:16/9}
+.chatMediaPlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:50px;height:50px;border-radius:50%;background:#0009;color:white;font-size:24px;pointer-events:none}
+.chatMediaCaption{display:flex;align-items:center;gap:8px;padding:8px 10px;font:13px/1.4 Arial,Helvetica,sans-serif;min-width:0}
+.chatMediaCaptionName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.chatMediaCaptionSize{flex:none;white-space:nowrap;color:#7b8795;font-size:11px}
+.chatMediaLoading{position:absolute;inset:0;display:grid;place-items:center;background:#edf2f8e6;color:#53647a;font:13px Arial,Helvetica,sans-serif}
+.chatMediaThumb[data-chat-kind="video"] .chatMediaLoading{background:#1b2939e6;color:#dbe8f7}
+.chatMediaThumb.chatMediaReady .chatMediaLoading{display:none}
+.chatMediaThumb.chatMediaError .chatMediaLoading{background:#eeeaf0;color:#933e4b}
+.chatMediaPicker{width:min(540px,94vw);max-height:min(85vh,730px);padding:0;border:1px solid #dce3ed;border-radius:13px;background:var(--surface,#fff);color:inherit;box-shadow:0 18px 55px #0005}
+.chatMediaPicker::backdrop{background:#0009}
+.chatMediaPickerHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;border-bottom:1px solid #e2e8f0}
+.chatMediaPickerBody{padding:12px 16px;display:flex;flex-direction:column;gap:10px;max-height:65vh;overflow:auto}
+.chatMediaPickerFolder{display:flex;flex-direction:column;gap:3px;max-height:32vh;overflow:auto;border:1px solid #e4e9f1;border-radius:8px;padding:5px}
+.chatMediaPickerFolder button{border:0;background:transparent;text-align:left;padding:10px 8px;color:inherit;font:inherit;cursor:pointer;border-radius:6px}
+.chatMediaPickerFolder button:hover,.chatMediaPickerFolder button:focus-visible{background:#e8f1ff;color:#184d9e}
+.chatMediaPickerName{box-sizing:border-box;width:100%;min-height:41px;padding:8px 10px;border:1px solid #cbd6e4;border-radius:8px;font:inherit;color:inherit;background:var(--surface,#fff)}
+.chatMediaPickerFooter{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #e2e8f0}
+.chatMediaPickerStatus{font-size:12px;color:#58677a;overflow-wrap:anywhere}
+.filePreviewHeader .chatMediaSaveAction{white-space:nowrap}
+@media(max-width:650px){.chatMediaThumb{width:min(100%,380px)}.chatMediaVisual{max-height:215px}.chatMediaVisual img,.chatMediaVisual video{max-height:215px}.chatMediaPickerFooter{padding:10px}}
 `;
 writeFileSync(cssFile,css);

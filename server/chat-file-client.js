@@ -27,7 +27,7 @@ function chatFileMessageHtml(m){
   attachments.push({id,name,size:Number(size)});return '';
  });
  if(!attachments.length)return voiceMessageHtml(m);
- const buttons=attachments.map(f=>'<button class="chatStoredFile" type="button" data-chat-download="'+f.id+'" data-chat-name="'+esc(f.name)+'" data-chat-convo="'+m.convo+'" aria-label="Открыть '+esc(f.name)+'">📎 <span class="chatStoredFileName">'+esc(f.name)+'</span><span class="chatStoredFileSize">'+(f.size/1048576).toFixed(2)+' МБ</span></button>').join('');
+ const buttons=attachments.map(f=>chatMediaHtml(f,m)||'<button class="chatStoredFile" type="button" data-chat-download="'+f.id+'" data-chat-name="'+esc(f.name)+'" data-chat-convo="'+m.convo+'" aria-label="Открыть '+esc(f.name)+'">📎 <span class="chatStoredFileName">'+esc(f.name)+'</span><span class="chatStoredFileSize">'+(f.size/1048576).toFixed(2)+' МБ</span></button>').join('');
  return (caption.trim()?'<div class="chatFileCaption">'+linkify(caption.trim())+'</div>':'')+'<div class="chatStoredFiles">'+buttons+'</div>';
 }
 async function chatApi(action,params,binary){
