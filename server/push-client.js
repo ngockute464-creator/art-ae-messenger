@@ -28,22 +28,28 @@ function keyBytes(base64){
  const raw=atob(base.padEnd(Math.ceil(base.length/4)*4,'='));
  return Uint8Array.from(raw,ch=>ch.charCodeAt(0));
 }
+async function withTimeout(promise,ms,error){
+ let timer;
+ try{
+  return await Promise.race([promise,new Promise((_,reject)=>{
+   timer=setTimeout(()=>reject(Error(error)),ms);
+  })]);
+ }finally{clearTimeout(timer)}
+}
 async function registration(create=false){
  // getRegistration() works without a controlling worker. ready may never resolve
  // if installation failed, so never await ready in the status-checking UI.
- let reg=await navigator.serviceWorker.getRegistration();
+ let reg=await withTimeout(navigator.serviceWorker.getRegistration(),8000,'Service Worker не отвечает');
  if(!reg&&create)reg=await navigator.serviceWorker.register('/sw.js');
  if(!reg)return null;
  if(!create||reg.active)return reg;
- return Promise.race([
-  navigator.serviceWorker.ready,
-  new Promise((_,reject)=>setTimeout(()=>reject(Error(
-   'Service Worker не активировался. Закройте и снова откройте PWA.')),10000))
- ]);
+ return withTimeout(navigator.serviceWorker.ready,10000,
+  'Service Worker не активировался. Закройте и снова откройте PWA.');
 }
 async function currentSubscription(){
  const reg=await registration(false);
- return reg?.active?reg.pushManager.getSubscription():null;
+ return reg?.active?withTimeout(reg.pushManager.getSubscription(),8000,
+  'Push Manager не отвечает'):null;
 }
 function mountPush(panel){
  const label=document.createElement('p');label.className='artaePwaSmall';
@@ -85,11 +91,7 @@ function mountPush(panel){
     status.textContent='Сервер ещё не активировал Push. Проверьте VAPID в systemd.';
     return;
    }
-   const sub=await Promise.race([
-    currentSubscription(),
-    new Promise((_,reject)=>setTimeout(()=>reject(Error(
-     'Не удалось проверить Service Worker за 8 секунд')),8000))
-   ]);
+   const sub=await currentSubscription();
    if(sub){
     request.endpoint=sub.endpoint;
     enabled=!!(await request('status')).subscribed;
@@ -113,8 +115,11 @@ function mountPush(panel){
    status.textContent='Подключаем устройство…';
    const reg=await registration(true);
    if(!reg)throw Error('Не удалось зарегистрировать Service Worker');
-   const subscription=(await reg.pushManager.getSubscription())||
-    await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(config.publicKey)});
+   const subscription=(await withTimeout(reg.pushManager.getSubscription(),8000,
+     'Push Manager не отвечает'))||
+    await withTimeout(reg.pushManager.subscribe({
+     userVisibleOnly:true,applicationServerKey:keyBytes(config.publicKey)
+    }),12000,'Не удалось создать Push-подписку');
    await request('subscribe',{subscription:subscription.toJSON()});
    status.textContent='Уведомления включены';
    enabled=true;
