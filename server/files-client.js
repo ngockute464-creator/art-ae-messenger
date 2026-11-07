@@ -232,6 +232,17 @@ async function explorerDownload(path,name){
   document.body.append(link);link.click();link.remove();
  }catch(e){alert(e.message||'Не удалось скачать файл')}
 }
+function explorerDownloadFromViewer(path,chatSource,name){
+ const params=chatSource?{
+  action:'chatMediaDownload',project:chatSource.project,
+  convo:chatSource.convo,fileId:chatSource.fileId,
+  name:chatSource.name,messageId:chatSource.messageId
+ }:{action:'projectMediaDownload',project:explorer.project||project,path};
+ const anchor=document.createElement('a');
+ anchor.href='/.netlify/functions/files-explorer?'+new URLSearchParams(params);
+ anchor.download=name;anchor.rel='nofollow';
+ document.body.append(anchor);anchor.click();anchor.remove();
+}
 function explorerKind(name,mime){
  const ext=(name.split('.').pop()||'').toLowerCase(),type=(mime||'').toLowerCase();
  if(['png','jpg','jpeg','gif','webp','bmp','svg','avif','heic','heif'].includes(ext)||type.startsWith('image/'))return 'image';
@@ -333,6 +344,14 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
  const body=dialog.querySelector('.filePreviewBody');
  const close=dialog.querySelector('.filePreviewClose');
  const toolbar=dialog.querySelector('.filePreviewToolbar');
+ if(['image','video','pdf'].includes(kind)){
+  const download=document.createElement('button');download.type='button';
+  download.className='btn small fileViewerDownload';
+  download.textContent='↓ Скачать';
+  download.setAttribute('aria-label','Скачать оригинал '+name);
+  download.addEventListener('click',()=>explorerDownloadFromViewer(path,chatSource,name));
+  toolbar.append(download);
+ }
  if(chatSource){
   const save=document.createElement('button');
   save.type='button';save.className='btn small chatMediaSaveAction';
@@ -360,7 +379,7 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
   let signedUrl=null,blob=null;
   if(chatSource){
    signedUrl=chatMediaStreamUrl(chatSource);
-  }else if(kind==='video'){
+  }else if(kind==='video'||kind==='pdf'){
    // Signed cross-origin URLs cannot reliably be streamed/seeked on mobile.
    // Do not download an entire video as a Blob: the project API supports
    // same-origin GET, HEAD and byte-range requests using the login cookie.
@@ -370,6 +389,10 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
   }else blob=await explorerFileBlob(path);
   if(!dialog.open)return;
   body.replaceChildren();
+  if(kind==='pdf'){
+   await explorerPdfDocumentViewer(body,signedUrl,dialog);
+   return;
+  }
   if(kind==='text'||kind==='docx'){
    const pre=document.createElement('pre');pre.className='filePreviewText';
    if(kind==='docx'){
@@ -382,9 +405,8 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
    if(!signedUrl)objectUrl=URL.createObjectURL(new Blob([blob],{type:effective}));
    const media=document.createElement(kind==='pdf'?'object':kind==='image'?'img':kind);
    media.className='filePreviewMedia';
-   if(kind==='pdf'){media.data=signedUrl||objectUrl;media.type='application/pdf';media.setAttribute('aria-label','PDF '+name);
-    const fallback=document.createElement('p');fallback.textContent='Если браузер не показывает PDF, используйте кнопку «Скачать» рядом с файлом.';media.append(fallback);
-   }else media.src=signedUrl||objectUrl;
+   if(kind==='pdf'){throw Error('PDF должен открываться через встроенный просмотрщик')}
+   else media.src=signedUrl||objectUrl;
    if(kind==='audio'||kind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}
    if(kind==='video'){
     media.addEventListener('error',()=>{

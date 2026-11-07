@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 const gitBuild=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(!/^[a-f0-9]{40}$/.test(gitBuild))throw Error('PWA: no verified Git build SHA');
 const buildId=gitBuild; // The release manager and GitHub Actions both use pinned Git checkouts.
-const version='0.4.5-preview';
+const version='0.4.6-preview';
 
 const indexPath='public/index.html';
 let html=readFileSync(indexPath,'utf8');
@@ -46,7 +46,7 @@ const oldWorker=readFileSync('public/sw.js','utf8');
 if(!oldWorker.includes("self.addEventListener('fetch'")||
    !oldWorker.includes("self.addEventListener('install'"))throw Error('PWA: unexpected existing service worker');
 const sw=String.raw`const CACHE='art-ae-release-__BUILD__';
-const FILES=['./','./index.html','./styles.css','./app.js','./auth.js','./auth.css','./manifest.webmanifest','./icon.svg','./pwa-client.js','./office-client.js'];
+const FILES=['./','./index.html','./styles.css','./app.js','./auth.js','./auth.css','./manifest.webmanifest','./icon.svg','./pwa-client.js','./office-client.js','./vendor/pdfjs/pdf.mjs','./vendor/pdfjs/pdf.worker.mjs'];
 const PATHS=new Set(FILES.map(p=>new URL(p,self.registration.scope).pathname));
 self.addEventListener('install',event=>{
  event.waitUntil((async()=>{

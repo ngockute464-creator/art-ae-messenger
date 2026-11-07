@@ -109,6 +109,7 @@ writeFileSync(file,app);
 const sw='public/sw.js';
 let worker=readFileSync(sw,'utf8').replace('art-ae-shared-text-v1','art-ae-file-mentions-v10');
 writeFileSync(sw,worker);
+await import('./vendor-pdfjs.mjs');
 await import('../server/files-patch.mjs');
 await import('../server/pwa-patch.mjs');
 // Use the isolated Office only when an exact HTTPS origin is explicitly configured.
