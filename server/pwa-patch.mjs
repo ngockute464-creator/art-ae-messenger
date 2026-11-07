@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 const gitBuild=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(!/^[a-f0-9]{40}$/.test(gitBuild))throw Error('PWA: no verified Git build SHA');
 const buildId=gitBuild; // The release manager and GitHub Actions both use pinned Git checkouts.
-const version='0.3.5-preview';
+const version='0.3.6-preview';
 
 const indexPath='public/index.html';
 let html=readFileSync(indexPath,'utf8');
@@ -50,10 +50,22 @@ const FILES=['./','./index.html','./styles.css','./app.js','./auth.js','./auth.c
 const PATHS=new Set(FILES.map(p=>new URL(p,self.registration.scope).pathname));
 self.addEventListener('install',event=>{
  event.waitUntil((async()=>{
-  const cache=await caches.open(CACHE);
-  await cache.addAll(FILES.map(p=>new Request(new URL(p,self.registration.scope),{cache:'reload'})));
-  // Activation only changes the network/cache layer. Existing tabs are NOT reloaded
-  // until their own client confirms there are no unsaved drafts or active editors.
+  // Never allow one missing offline asset or a CacheStorage error to leave the
+  // PWA in the "installing" state indefinitely. Cache each asset independently.
+  try{
+   const cache=await caches.open(CACHE);
+   const result=await Promise.allSettled(FILES.map(async file=>{
+    const request=new Request(new URL(file,self.registration.scope),{cache:'reload'});
+    const response=await fetch(request);
+    if(!response.ok)throw Error(file+': HTTP '+response.status);
+    await cache.put(request,response);
+   }));
+   for(let i=0;i<result.length;i++){
+    if(result[i].status==='rejected')
+     console.warn('[ART-AE SW] Failed to precache '+FILES[i],result[i].reason);
+   }
+  }catch(error){console.warn('[ART-AE SW] Precache unavailable',error)}
+  // Keep SW available for Push even if offline caching is partially unavailable.
   await self.skipWaiting();
  })());
 });
