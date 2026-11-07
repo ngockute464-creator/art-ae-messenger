@@ -27,7 +27,7 @@ function queueOutgoing(cid,text){
  data.messages.push(m);
  const d=drafts[cid];if(d)d.text='';
  const field=$('draft');if(convo===cid&&field)field.value='';
- repaintOutgoing(cid);dispatchOutgoing(m);
+ repaintOutgoing(cid);if(typeof composerRefresh==='function')composerRefresh();dispatchOutgoing(m);
 }
 function retryOutgoing(id){
  const m=data.messages.find(row=>row.id===id);

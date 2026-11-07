@@ -12,11 +12,12 @@ const uxClient=readFileSync('server/ux-client.js','utf8');
 const mentionsClient=readFileSync('server/file-mentions.js','utf8');
 const officeClient=readFileSync('server/office-client.js','utf8');
 const reliableSend=readFileSync('server/reliable-send.js','utf8');
+const composerClient=readFileSync('server/composer-controls.js','utf8');
 const voiceClient=readFileSync('server/voice-client.js','utf8');
 const transcriptClient=readFileSync('server/transcript-client.js','utf8');
 const chatFileClient=readFileSync('server/chat-file-client.js','utf8');
 const messageMenuClient=readFileSync('server/message-menu-client.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+messageMenuClient+'\nfunction cp(){','client and resize functions');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+messageMenuClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -75,7 +76,7 @@ replace('<button type="button" class="btn" data-act="upload" title="Добави
         '<button type="button" class="btn composerAttach" data-act="upload" title="Прикрепить файл" aria-label="Прикрепить файл"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 11.5-8.9 8.9a6 6 0 0 1-8.5-8.5L13.2 2.3a4 4 0 0 1 5.7 5.7L9.3 17.6a2 2 0 0 1-2.8-2.8l9-9"/></svg></button>',
         'composer attachment icon');
 replace('<button class="btn primary" type="submit">Отправить</button>',
-        '<button class="btn primary composerSend" type="submit" title="Отправить сообщение" aria-label="Отправить сообщение"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>',
+        '<button class="btn primary composerSend" type="submit" ${composerHasSendableText()?"":"hidden"} title="Отправить сообщение" aria-label="Отправить сообщение"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg></button>',
         'composer submit icon');
 replace('rows="2" placeholder="Сообщение или пояснение к файлу..."',
         'rows="1" placeholder="Сообщение..."',
@@ -213,4 +214,25 @@ css+='\n'+"\n/* E11: one-line compact voice playback/transcription controls. */\
 css+='\n'+"\n/* E12: equal-sized buttons, input and SVG icons on desktop and mobile. */\n.composeLine{display:flex;align-items:center;gap:8px}\n.composeLine > button.btn{flex:0 0 40px;box-sizing:border-box;width:40px;min-width:40px;height:40px;min-height:40px;padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;border-radius:10px}\n.composeLine > button.btn svg{display:block;flex:none;width:22px;height:22px}\n.composeLine > button.composerSend,.composeLine > button.composerSend:hover{background:transparent;border-color:transparent;color:#2869dc}\n.composeLine > button.composerSend:hover{background:rgba(40,105,220,.09)}\n.composeLine > textarea#draft{box-sizing:border-box;flex:1 1 auto;width:100%;min-width:0;height:40px;min-height:40px;max-height:110px;padding:9px 11px;margin:0;line-height:20px;font:14px/20px Arial,Helvetica,sans-serif;resize:none}\n@media(max-width:650px){.composeLine{gap:6px}.composeLine > button.btn{width:40px;min-width:40px;height:40px;min-height:40px;padding:0}.composeLine > textarea#draft{min-height:40px;height:40px;padding:9px 10px}}\n";
 css+='\n'+"\n.messageEdit .editActions{display:flex;flex-wrap:nowrap;align-items:center;gap:8px;width:100%;max-width:100%;overflow-x:auto;padding-top:8px}\n.messageEdit .editActions .btn{flex:0 0 auto;white-space:nowrap;font:13px/1.3 Arial,Helvetica,sans-serif;min-height:36px;padding:7px 10px}\n@media(max-width:650px){.messageEdit .editActions{gap:5px}.messageEdit .editActions .btn{font-size:12px;padding:7px 8px}}\n";
 css+='\n'+"\n.chatStoredFiles{display:flex;flex-direction:column;align-items:flex-start;gap:5px;margin-top:5px;max-width:100%}\n.chatStoredFile{display:flex;align-items:center;gap:8px;max-width:100%;padding:7px 9px;border:1px solid #d4dbe6;border-radius:9px;background:transparent;color:inherit;text-align:left;cursor:pointer}\n.chatStoredFile:hover{background:rgba(120,140,160,.09)}\n.chatStoredFileName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px}\n.chatStoredFileSize{font-size:11px;white-space:nowrap;opacity:.65}\n.chatFileCaption{white-space:pre-wrap;overflow-wrap:anywhere}\n";
+css+='\n'+String.raw`
+/* E17: field -> paperclip -> contextual mic/send. */
+.composeLine{position:relative;align-items:flex-end}
+.composeLine>textarea#draft{order:0;flex:1 1 0%;align-self:center;overflow-y:auto;max-height:128px}
+.composeLine>.composerAttach{order:1}
+.composeLine>.voiceMic,.composeLine>.composerSend{order:2}
+.composeLine>button[hidden],.composeLine>.voiceHoldStatus[hidden]{display:none!important}
+.composeLine>.voiceMic{touch-action:none;user-select:none;-webkit-user-select:none;cursor:pointer}
+.composeLine>.voiceHoldStatus{order:0;display:flex;align-items:center;flex:1 1 0%;min-width:0;min-height:40px;gap:8px;white-space:nowrap;overflow:hidden;font:14px/20px Arial,Helvetica,sans-serif}
+.voiceHoldTimer{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+.voiceHoldHint{color:#69788c;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;font-size:12px}
+.voiceHoldStatus .voiceDot{font-size:22px;line-height:1;animation:artaeVoicePulse .85s infinite alternate}
+@keyframes artaeVoicePulse{from{opacity:1}to{opacity:.25}}
+.composeLine.voice-holding>textarea#draft,.composeLine.voice-holding>.composerAttach,
+.composeLine.voice-holding>.composerSend{display:none!important}
+.composeLine.voice-holding>.voiceHoldStatus{display:flex!important}
+.composeLine.voice-holding>.voiceMic{background:#1677e8;color:#fff;border-color:#1677e8;border-radius:50%;transform:scale(1.12);box-shadow:0 0 0 7px rgba(22,119,232,.12);z-index:1}
+.composeLine.voice-canceling>.voiceHoldStatus .voiceHoldHint{color:#d02b41}
+.composeLine.voice-canceling>.voiceMic{background:#d02b41;border-color:#d02b41}
+@media(max-width:650px){.composeLine>.voiceHoldStatus{gap:6px}.voiceHoldHint{font-size:12px}}
+`;
 writeFileSync(cssFile,css);

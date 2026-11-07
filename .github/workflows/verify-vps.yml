@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files, feature/mobile-composer-voice-gesture]
   workflow_dispatch:
 
 permissions:
@@ -60,6 +60,7 @@ jobs:
           node migration/tests/test-message-erasure-and-files.mjs
           node migration/tests/test-pwa-runtime.mjs
           node migration/tests/check-ui-markup.mjs
+          node migration/tests/test-mobile-composer-voice.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
           node --check migration/runtime/unread.mjs
