@@ -314,7 +314,7 @@ function explorerZoomableImage(media,body,bar){
  apply();
 }
 
-async function explorerPreview(path,name,mime){
+async function explorerPreview(path,name,mime,chatSource=null){
  if(/\.(docx|xlsx)$/i.test(name)){
   if(typeof window.ARTAE_OFFICE_PREVIEW!=='function'){
    alert('Office-просмотр не загрузился. Обновите страницу и попробуйте снова.');
@@ -332,6 +332,14 @@ async function explorerPreview(path,name,mime){
  dialog.querySelector('.filePreviewTitle').textContent=name;
  const body=dialog.querySelector('.filePreviewBody');
  const close=dialog.querySelector('button');
+ if(chatSource){
+  const save=document.createElement('button');
+  save.type='button';save.className='btn small chatMediaSaveAction';
+  save.textContent='В файлы проекта';
+  save.setAttribute('aria-label','Сохранить оригинал в файлы проекта');
+  save.addEventListener('click',()=>{void chatMediaCopyPicker(chatSource)});
+  close.before(save);
+ }
  let objectUrl=null;
  function dispose(){if(objectUrl)URL.revokeObjectURL(objectUrl);dialog.remove()}
  dialog.addEventListener('close',dispose,{once:true});
@@ -339,7 +347,14 @@ async function explorerPreview(path,name,mime){
  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()});
  document.body.append(dialog);dialog.showModal();
  try{
-  const blob=await explorerFileBlob(path);
+  let signedUrl=null,blob=null;
+  if(chatSource){
+   const link=await chatApi('chatDownloadLink',{
+    project:chatSource.project,convo:chatSource.convo,
+    fileId:chatSource.fileId,name:chatSource.name
+   });
+   signedUrl=chatMediaValidatedUrl(link.href);
+  }else blob=await explorerFileBlob(path);
   if(!dialog.open)return;
   body.replaceChildren();
   if(kind==='text'||kind==='docx'){
@@ -351,13 +366,13 @@ async function explorerPreview(path,name,mime){
    body.append(pre);
   }else{
    const effective=kind==='pdf'?'application/pdf':kind==='image'?(mime||'image/png'):kind==='audio'?(mime||'audio/mpeg'):(mime||'video/mp4');
-   objectUrl=URL.createObjectURL(new Blob([blob],{type:effective}));
+   if(!signedUrl)objectUrl=URL.createObjectURL(new Blob([blob],{type:effective}));
    const media=document.createElement(kind==='pdf'?'object':kind==='image'?'img':kind);
    media.className='filePreviewMedia';
-   if(kind==='pdf'){media.data=objectUrl;media.type='application/pdf';media.setAttribute('aria-label','PDF '+name);
+   if(kind==='pdf'){media.data=signedUrl||objectUrl;media.type='application/pdf';media.setAttribute('aria-label','PDF '+name);
     const fallback=document.createElement('p');fallback.textContent='Если браузер не показывает PDF, используйте кнопку «Скачать» рядом с файлом.';media.append(fallback);
-   }else media.src=objectUrl;
-   if(kind==='audio'||kind==='video')media.controls=true;
+   }else media.src=signedUrl||objectUrl;
+   if(kind==='audio'||kind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}
    if(kind==='image')media.alt=name;
    if(kind==='image')explorerZoomableImage(media,body,dialog.querySelector('.filePreviewHeader'));
    else body.append(media);
