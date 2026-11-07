@@ -7,7 +7,7 @@ import {getSession} from './auth.mjs';
 import {query, transaction} from './postgres.mjs';
 import {messageStats,markMessagesRead} from './unread.mjs';
 import {renameProjectFolder, folderForName} from './project-rename.mjs';
-import {extractChatAttachmentRefs} from './chat-attachment-cleanup.mjs';
+import {extractChatAttachmentRefs,pumpChatAttachmentCleanup} from './chat-attachment-cleanup.mjs';
 
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(data,status=200)=>Response.json(data,{status,headers});
@@ -323,6 +323,8 @@ export default async function handler(req) {
         return changed;
       });
       if(!updated)return reply({error:'Сообщение уже изменено'},409);
+      // Try immediately; the durable worker will retry after interruptions.
+      if(!isEdit&&extractChatAttachmentRefs(m.body).length)void pumpChatAttachmentCleanup();
       return reply({message:messageView(updated)});
     }
     return reply({error:'Unknown action'},404);
