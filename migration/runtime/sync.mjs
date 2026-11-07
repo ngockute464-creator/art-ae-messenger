@@ -5,6 +5,7 @@
 import {randomUUID} from 'node:crypto';
 import {getSession} from './auth.mjs';
 import {query, transaction} from './postgres.mjs';
+import {messageStats,markMessagesRead} from './unread.mjs';
 import {renameProjectFolder, folderForName} from './project-rename.mjs';
 
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
@@ -133,6 +134,15 @@ export default async function handler(req) {
       if(!body||typeof body!=='object'||Array.isArray(body))return reply({error:'Invalid JSON'},400);
     }
     const url=new URL(req.url),action=req.method==='GET'?url.searchParams.get('action'):body.action;
+    if(action==='messageStats'&&req.method==='GET') {
+      return reply({conversations:await messageStats(session.user.id)});
+    }
+    if(action==='markRead'&&req.method==='POST') {
+      if(!uuid(body.convo)||!Array.isArray(body.ids)||body.ids.length<1||body.ids.length>100||
+         body.ids.some(id=>!uuid(id)))return reply({error:'Некорректный список сообщений'},400);
+      if(!await activeConvo(body.convo))return reply({error:'Разговор не найден'},404);
+      return reply(await markMessagesRead(session.user.id,body.convo,[...new Set(body.ids)]));
+    }
     if(action==='overview'&&req.method==='GET') {
       const [projects,convos]=await Promise.all([
         query('SELECT * FROM public.artae_projects WHERE deleted_at IS NULL ORDER BY created_at ASC'),
