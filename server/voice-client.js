@@ -132,7 +132,7 @@ async function voiceStart(gesture=null){
   if(gesture&&voiceHoldGesture===gesture){gesture.ended=true;voiceHoldGesture=null;voiceStopHoldTimer();composerRefresh()}
   alert('Этот браузер не поддерживает запись аудио.');return;
  }
- let stream;
+ let stream,newDraft=null;
  try{
   stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
   if(gesture&&(gesture.ended||voiceHoldGesture!==gesture)){
@@ -145,7 +145,7 @@ async function voiceStart(gesture=null){
   if(!format)throw Error('Неподдерживаемый формат записи');
   const d={id:crypto.randomUUID(),convo,format,mime,rec,stream,status:'recording',
    started:Date.now(),pieces:[],preview:null,seconds:0,autoSend:false};
-  voiceDraft=d;
+  voiceDraft=d;newDraft=d;
   rec.ondataavailable=event=>{if(voiceDraft===d&&event.data?.size)d.pieces.push(event.data)};
   rec.onerror=()=>{
    if(voiceDraft===d){
@@ -170,6 +170,7 @@ async function voiceStart(gesture=null){
    gesture.recording=true;gesture.startedAt=d.started;voicePaintHold();
   }else render();
  }catch(error){
+  if(newDraft&&voiceDraft===newDraft)voiceDraft=null;
   stream?.getTracks().forEach(t=>t.stop());
   if(gesture&&voiceHoldGesture===gesture){
    gesture.ended=true;voiceHoldGesture=null;voiceStopHoldTimer();composerRefresh();

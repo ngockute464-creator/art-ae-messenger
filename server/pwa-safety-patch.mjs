@@ -15,6 +15,7 @@ window.ARTAE_CAN_AUTO_RELOAD=()=>{
   if(typeof editing!=='undefined'&&editing)return false;
   if(typeof modal!=='undefined'&&modal)return false;
   if(typeof voiceDraft!=='undefined'&&voiceDraft)return false;
+  if(typeof voiceHoldGesture!=='undefined'&&voiceHoldGesture)return false;
   if(typeof chatPendingFiles!=='undefined'&&chatPendingFiles.size)return false;
   if(typeof chatSending!=='undefined'&&chatSending.size)return false;
   if(typeof explorerUploading!=='undefined'&&explorerUploading)return false;
