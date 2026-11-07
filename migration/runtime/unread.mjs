@@ -6,7 +6,7 @@ async function ensureReadBaseline(userId){
  // Existing baselines are immutable.
  await query(
   'INSERT INTO public.artae_read_baselines(user_id,before_created_at) '+
-  'SELECT $1,COALESCE(MAX(created_at),0) FROM public.artae_messages '+
+  'SELECT $1,COALESCE(MAX(created_at),0) FROM public.artae_messages WHERE true '+
   'ON CONFLICT(user_id) DO NOTHING',[userId]);
 }
 
