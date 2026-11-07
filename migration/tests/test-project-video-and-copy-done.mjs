@@ -9,7 +9,7 @@ const viewer=readFileSync('server/files-client.js','utf8');
 const picker=readFileSync('server/chat-media-client.js','utf8');
 const styles=readFileSync('public/styles.css','utf8');
 const built=readFileSync('public/app.js','utf8');
-assert.ok(http.includes("['chatMedia','projectMedia'].includes"));
+assert.ok(http.includes("['chatMedia','projectMedia','chatMediaDownload','projectMediaDownload'].includes"));
 assert.ok(viewer.includes("action:'projectMedia',project:explorer.project||project,path"));
 assert.ok(built.includes("action:'projectMedia',project:explorer.project||project,path"));
 assert.match(styles,/\.chatMediaPickerFooter>\[hidden\]\{display:none!important\}/);
