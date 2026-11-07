@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files, feature/mobile-composer-voice-gesture, fix/composer-focus-persistence, feature/chat-media-preview-copy, fix/chat-media-streaming, fix/mobile-media-viewer-layout, fix/mobile-video-byte-ranges]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files, feature/mobile-composer-voice-gesture, fix/composer-focus-persistence, feature/chat-media-preview-copy, fix/chat-media-streaming, fix/mobile-media-viewer-layout, fix/mobile-video-byte-ranges, fix/viewer-focus-chat-attachment-deletion]
   workflow_dispatch:
 
 permissions:
@@ -66,6 +66,9 @@ jobs:
           node migration/tests/test-chat-media.mjs
           node migration/tests/test-mobile-video-range.mjs
           node migration/tests/test-mobile-media-viewer.mjs
+          node migration/tests/test-chat-attachment-cleanup.mjs
+          node migration/tests/test-viewer-keyboard-focus.mjs
+          node --check migration/runtime/chat-attachment-cleanup.mjs
           node --test tests/e12-composer.test.mjs tests/e9-voice.test.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
@@ -108,7 +111,7 @@ jobs:
 
 
   verify-unread-postgres:
-    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files'
+    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files' || github.ref == 'refs/heads/fix/viewer-focus-chat-attachment-deletion'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -153,3 +156,6 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f migration/sql/005_erase_deleted_text.sql
           psql -v ON_ERROR_STOP=1 -f migration/sql/005_erase_deleted_text.sql
           psql -v ON_ERROR_STOP=1 -f migration/tests/verify-deleted-text.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/006_chat_file_deletions.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/006_chat_file_deletions.sql
+          psql -v ON_ERROR_STOP=1 -f migration/tests/verify-chat-file-deletions.sql

@@ -10,7 +10,7 @@ const styles=readFileSync('public/styles.css','utf8');
 assert.match(generated,/chatMediaHtml\(f,m\)/);
 assert.match(generated,/chatMediaCopyPicker/);
 assert.match(styles,/\.chatMediaVisual img,\.chatMediaVisual video\{[^}]*object-fit:contain/);
-assert.match(explorer,/async function explorerPreview\(path,name,mime,chatSource=null\)/);
+assert.match(explorer,/async function explorerPreview\(path,name,mime,chatSource=null,opener=null\)/);
 assert.match(explorer,/media\.src=signedUrl\|\|objectUrl/);
 assert.match(explorer,/save\.textContent='В файлы проекта'/);
 assert.match(api,/\/resources\/copy/);
