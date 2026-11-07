@@ -70,6 +70,7 @@ runuser -u artae_app -- /usr/local/bin/node --input-type=module -e \
 log 'New API syntax and local DB connection verified'
 log 'Switching artae.service to local PostgreSQL (Caddy and frontend unchanged)'
 install -d -m 755 /etc/systemd/system/artae.service.d
+CHANGED=1
 cat > "$OVERRIDE" <<'UNITFILE'
 [Service]
 User=artae_app
@@ -82,7 +83,6 @@ Environment=ARTAE_API_PORT=3100
 Environment=ARTAE_PUBLIC_ORIGIN=https://artae.duckdns.org
 Environment=ARTAE_NEXT_ALLOW_DISK_WRITES=1
 UNITFILE
-CHANGED=1
 systemctl daemon-reload
 systemctl restart "$UNIT"
 healthy=0
