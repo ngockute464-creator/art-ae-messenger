@@ -16,7 +16,7 @@ const offlineCache=new Map();
 let skipCount=0,claimCount=0;
 const registration={scope:'https://artae.duckdns.org/'};
 const context={
- URL,Request,Response,Promise,Set,console:{warn(){}},
+ URL,Request,Response,Promise,Set,console:{warn:(...args)=>console.log('[SIMULATED SW]',...args)},
  self:{
   registration,location:{origin:'https://artae.duckdns.org'},
   addEventListener:(name,handler)=>listeners.set(name,handler),
@@ -42,6 +42,7 @@ listeners.get('install')({waitUntil:p=>{installPromise=p}});
 assert.ok(installPromise);
 await installPromise;
 assert.equal(skipCount,1,'SW must skip waiting even after missing optional file');
+console.log('SW_SIMULATION_CACHED',offlineCache.size,'EXPECTED',files.length-1);
 assert.ok(offlineCache.size>=files.length-1,'Unfailed assets must remain cached');
 let activatePromise;
 listeners.get('activate')({waitUntil:p=>{activatePromise=p}});
