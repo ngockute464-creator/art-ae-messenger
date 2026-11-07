@@ -24,6 +24,9 @@ echo '[push] Installing pinned transport separately from the production API depe
 DEPS='/opt/artae-next/push-deps'
 install -d -m 755 "$DEPS"
 npm install --prefix "$DEPS" --no-save --ignore-scripts --no-audit --no-fund web-push@3.6.7 >/dev/null
+# umask 077 is essential for VAPID secrets, but npm modules are code loaded by
+# the restricted artae_app runtime: make ONLY the public dependency tree readable.
+chmod -R a+rX "$DEPS/node_modules"
 /usr/local/bin/node -e "if(require('$DEPS/node_modules/web-push/package.json').version!=='3.6.7')process.exit(1)"
 echo '[push] Preparing private VAPID keys'
 ARTAE_DEP_PATH="$DEPS/node_modules/web-push" /usr/local/bin/node <<'NODE'
