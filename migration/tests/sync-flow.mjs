@@ -108,7 +108,7 @@ try {
   assert.equal(listAfter.messages[0].text,'');
   assert.equal(deleted.message.text,'');
   const {rows:[erased]}=await query('SELECT body,deleted_at FROM public.artae_messages WHERE id=$1',[messageId]);
-  assert.equal(erased.body,'Deleted message must not retain text');
+  assert.equal(erased.body,'','Deleted message must not retain text');
   assert.equal(listAfter.messages[0].deletedAt,deleted.message.deletedAt);
 
   await call(post('deleteProject',{id:projectId,confirmName:marker}),200);
