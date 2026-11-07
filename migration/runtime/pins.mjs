@@ -89,9 +89,22 @@ export default async function handler(req) {
       if(!pin)return reply({ok:true,removed:false});
       await activeProject(pin.project_id);
       if(!validItem('file',pin.item_key))return reply({error:'Недопустимый файл'},400);
-      // Never ask the live Yandex Disk for existence and then delete records
-      // from the migration copy without an explicit isolated storage setup.
-      return reply({error:'Проверка файла на Яндекс Диске пока не подключена'},503);
+      const {rows:[pr]}=await query(
+        'SELECT folder_path FROM public.artae_projects WHERE id=$1',[pin.project_id]);
+      const folder=pr?.folder_path;
+      if(!folder||!/^app:\/[^/]+$/.test(folder))return reply({error:'Недопустимая папка проекта'},400);
+      const token=process.env.YANDEX_DISK_TOKEN;
+      if(!token)return reply({error:'Яндекс Диск не настроен'},503);
+      const url=new URL('https://cloud-api.yandex.net/v1/disk/resources');
+      url.searchParams.set('path',folder+'/'+pin.item_key);
+      url.searchParams.set('fields','name,type');
+      const found=await fetch(url,{headers:{Authorization:'OAuth '+token},signal:AbortSignal.timeout(15000)});
+      if(found.status===404){
+        await query('DELETE FROM public.artae_pins WHERE id=$1',[pin.id]);
+        return reply({ok:true,removed:true});
+      }
+      if(!found.ok)return reply({error:'Не удалось проверить файл на Яндекс Диске'},502);
+      return reply({ok:true,removed:false});
     }
     if(action==='note') {
       if(!uuid(arg.id)||typeof arg.note!=='string'||arg.note.length>300)
