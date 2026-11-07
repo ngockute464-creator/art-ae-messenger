@@ -49,6 +49,8 @@ jobs:
           node --check migration/runtime/push.mjs
           node --check migration/runtime/push-worker.mjs
           node --check migration/runtime/push-transport.mjs
+          node migration/tests/test-push-artifacts.mjs
+          test -s migration/sql/004_web_push.sql
           grep -q "artaePushControls" public/push-client.js
           grep -q "ARTAE_PUSH_OPEN" public/sw.js
           grep -q "artae_push_deliveries" migration/runtime/sync.mjs
@@ -84,10 +86,11 @@ jobs:
           bash -n deploy/artae-auto.sh
           bash -n migration/deploy/switch-local.sh
           bash -n migration/deploy/apply-message-reads.sh
+          bash -n migration/deploy/bootstrap-push.sh
 
 
   verify-unread-postgres:
-    if: github.ref == 'refs/heads/feature/message-counts-read'
+    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -125,3 +128,6 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f migration/sql/003_message_reads.sql
           psql -v ON_ERROR_STOP=1 -f migration/sql/003_message_reads.sql
           psql -v ON_ERROR_STOP=1 -f migration/tests/unread-verify.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/004_web_push.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/004_web_push.sql
+          psql -v ON_ERROR_STOP=1 -f migration/tests/push-fixtures.sql
