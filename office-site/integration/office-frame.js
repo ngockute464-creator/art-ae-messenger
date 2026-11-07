@@ -59,14 +59,18 @@ addEventListener('message',async event=>{
   return;
  }
  if(msg.type==='artae-office-close'){
+  const wasReadonly=!!viewOnly()?.active;
   try{
-   if(viewOnly()?.active)viewOnly().release();
+   if(wasReadonly)viewOnly().release();
    if(document.documentElement.dataset.app!=='quire'||!ready()||typeof window.L.app.closeDocument!=='function')
     throw Error('Безопасное закрытие недоступно');
    const closed=await window.L.app.closeDocument();
    if(closed===true)installSaveBridge('',false);
+   else if(wasReadonly)viewOnly().activate('quire');
    window.parent.postMessage({type:'artae-office-close-result',closed:closed===true},origin);
   }catch(error){
+   // If the editor refuses to close, restore the read-only protections.
+   if(wasReadonly&&!viewOnly()?.active)try{viewOnly().activate('quire')}catch{}
    window.parent.postMessage({type:'artae-office-close-result',closed:false,error:String(error?.message||error)},origin);
   }
   return;
