@@ -317,4 +317,11 @@ css+='\n'+String.raw`
  .filePreviewDialog .fileImageViewport{height:min(62vh,570px);height:min(62dvh,570px);min-height:180px}
 }
 `;
+css+='\n'+String.raw`
+/* When the device cannot decode a video, offer the intact original. */
+.fileVideoError{margin:12px 0 4px;padding:12px;border:1px solid #ead7ba;
+ border-radius:10px;background:#fff8ed;color:#553f23;line-height:1.5}
+.fileVideoError p{margin:0 0 8px}
+.fileVideoError a{display:inline-flex;align-items:center;min-height:36px}
+`;
 writeFileSync(cssFile,css);

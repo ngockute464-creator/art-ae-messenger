@@ -370,6 +370,19 @@ async function explorerPreview(path,name,mime,chatSource=null){
     const fallback=document.createElement('p');fallback.textContent='Если браузер не показывает PDF, используйте кнопку «Скачать» рядом с файлом.';media.append(fallback);
    }else media.src=signedUrl||objectUrl;
    if(kind==='audio'||kind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}
+   if(kind==='video'&&chatSource){
+    media.addEventListener('error',()=>{
+     if(!dialog.open||body.querySelector('.fileVideoError'))return;
+     const notice=document.createElement('div');
+     notice.className='fileVideoError';notice.setAttribute('role','status');
+     const explanation=document.createElement('p');
+     explanation.textContent='Видео не воспроизводится в этом браузере. Возможная причина — неподдерживаемый кодек или ошибка передачи.';
+     const download=document.createElement('a');
+     download.className='btn small';download.textContent='Сохранить оригинал на устройство';
+     download.href=chatMediaStreamUrl(chatSource);download.download=name;
+     notice.append(explanation,download);body.append(notice);
+    },{once:true});
+   }
    if(kind==='image')media.alt=name;
    if(kind==='image')explorerZoomableImage(media,body,toolbar);
    else body.append(media);
