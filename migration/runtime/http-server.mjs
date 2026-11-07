@@ -5,13 +5,20 @@ import {createServer} from 'node:http';
 import {Readable} from 'node:stream';
 import auth from './auth.mjs';
 import sync from './sync.mjs';
+import pins from './pins.mjs';
+import filesExplorer from './files-explorer.mjs';
+import voice from './voice.mjs';
+import voiceTranscript from './voice-transcript.mjs';
 import {assertLocalDatabase, query, closePool} from './postgres.mjs';
 
 const HOST='127.0.0.1', PORT=3101;
 const ORIGIN='http://127.0.0.1:3101';
 const MAX_BODY=4*1024*1024;
 const PREFIX='/.netlify/functions/';
-const handlers=new Map([['auth',auth],['sync',sync]]);
+const handlers=new Map([
+  ['auth',auth],['sync',sync],['pins',pins],
+  ['files-explorer',filesExplorer],['voice',voice],['voice-transcript',voiceTranscript]
+]);
 const noCache={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 
 function fail(res,status,message) {
