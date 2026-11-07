@@ -36,7 +36,7 @@ async function explorerPdfDocumentViewer(body,url,dialog){
  const canvas=document.createElement('canvas');canvas.className='artaePdfCanvas';
  viewport.append(canvas);
  body.append(toolbar,status,viewport);
- let documentHandle=null,renderTask=null,renderSerial=0,searchSerial=0;
+ let documentHandle=null,loadingTask=null,renderTask=null,renderSerial=0,searchSerial=0;
  let page=1,zoom=1,closed=false,loaded=false;
  const current=()=>documentHandle&&page>=1&&page<=documentHandle.numPages;
  const changePage=async(next)=>{
@@ -57,7 +57,7 @@ async function explorerPdfDocumentViewer(body,url,dialog){
  const stop=()=>{
   closed=true;searchSerial++;renderSerial++;
   renderTask?.cancel();
-  if(documentHandle)void documentHandle.destroy().catch(()=>{});
+  if(loadingTask)void loadingTask.destroy().catch(()=>{});
  };
  dialog.addEventListener('close',stop,{once:true});
  async function renderPage(){
@@ -123,14 +123,14 @@ async function explorerPdfDocumentViewer(body,url,dialog){
  try{
   const pdfjs=await artaeLoadPdfJs();
   if(closed)return;
-  const loading=pdfjs.getDocument({
+  loadingTask=pdfjs.getDocument({
    url,withCredentials:true,
    rangeChunkSize:131072,
    disableAutoFetch:true,
    isEvalSupported:false
   });
-  documentHandle=await loading.promise;
-  if(closed){await documentHandle.destroy();return}
+  documentHandle=await loadingTask.promise;
+  if(closed){await loadingTask.destroy();return}
   loaded=true;
   total.textContent='/ '+documentHandle.numPages;
   pageBox.max=String(documentHandle.numPages);

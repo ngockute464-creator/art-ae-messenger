@@ -26,11 +26,12 @@ const xref=Buffer.byteLength(pdf);
 pdf+='xref\n0 5\n0000000000 65535 f \n';
 for(let i=1;i<=4;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
 pdf+='trailer\n<< /Root 1 0 R /Size 5 >>\nstartxref\n'+xref+'\n%%EOF\n';
-const doc=await pdfjs.getDocument({
+const task=pdfjs.getDocument({
  data:new Uint8Array(Buffer.from(pdf,'utf8')),
  isEvalSupported:false,
  disableFontFace:true
-}).promise;
+});
+const doc=await task.promise;
 assert.equal(doc.numPages,1);
 const page=await doc.getPage(1);
 const vp=page.getViewport({scale:1});
@@ -38,5 +39,5 @@ assert.equal(vp.width,400);
 assert.equal(vp.height,600);
 const t=await page.getTextContent();
 assert.ok(Array.isArray(t.items));
-await doc.destroy();
+await task.destroy();
 console.log('PDFJS_RUNTIME_OK pinned_assets=true page_count=1 dimensions=400x600 local_worker=true');
