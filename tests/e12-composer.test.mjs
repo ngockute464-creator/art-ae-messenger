@@ -13,5 +13,6 @@ test('composer uses paper-plane send and accessible controls',()=>{
 test('single line placeholder and uniform 40px controls',()=>{
  assert.match(patch,/rows="1" placeholder="Сообщение\.\.\."/);
  assert.match(patch,/min-height:40px/);
- assert.match(patch,/\\.composeLine > textarea#draft/);
+ assert.ok(patch.includes('.composeLine>textarea#draft'));
+ assert.match(patch,/voiceHoldStatus/);
 });
