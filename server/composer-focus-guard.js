@@ -7,8 +7,9 @@ const composerUnprotectedRender=render;
 function composerProtectsFocus(){
  const active=document.activeElement;
  const field=active?.id==='draft'&&active?.isConnected?active:null;
- if(field&&view==='chat'&&!modal&&!editing)
-  composerFocusedSession={field,project,convo,composing:!!composerFocusedSession?.composing};
+ if(field&&view==='chat'&&!modal&&!editing&&
+    (!composerFocusedSession||composerFocusedSession.field!==field))
+  composerFocusedSession={field,project,convo,composing:false};
  const session=composerFocusedSession;
  return !!session&&view==='chat'&&project===session.project&&convo===session.convo&&
   !modal&&!editing&&session.field.isConnected&&
