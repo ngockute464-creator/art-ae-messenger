@@ -349,11 +349,7 @@ async function explorerPreview(path,name,mime,chatSource=null){
  try{
   let signedUrl=null,blob=null;
   if(chatSource){
-   const link=await chatApi('chatDownloadLink',{
-    project:chatSource.project,convo:chatSource.convo,
-    fileId:chatSource.fileId,name:chatSource.name
-   });
-   signedUrl=chatMediaValidatedUrl(link.href);
+   signedUrl=chatMediaStreamUrl(chatSource);
   }else blob=await explorerFileBlob(path);
   if(!dialog.open)return;
   body.replaceChildren();

@@ -1,7 +1,13 @@
 // Lazy inline image/video previews for files stored in the private chat area.
 // Signed download links are kept only in memory and refreshed when needed.
 // No image scaling, video conversion or browser-sized re-upload of originals.
-const chatMediaLinks=new Map();
+// Same-origin stream: the HttpOnly session cookie authorizes each media GET.
+function chatMediaStreamUrl(source){
+ return '/.netlify/functions/files-explorer?'+new URLSearchParams({
+  action:'chatMedia',project:source.project,convo:source.convo,
+  fileId:source.fileId,name:source.name,messageId:source.messageId
+ });
+}
 function chatMediaKind(name){
  const kind=explorerKind(name,'');
  return kind==='image'||kind==='video'?kind:null;
@@ -35,17 +41,6 @@ function chatMediaSource(el){
   fileId:el.dataset.chatId,name:el.dataset.chatName,
   messageId:el.dataset.chatMessage};
 }
-async function chatMediaLink(source){
- const key=source.fileId,now=Date.now(),cached=chatMediaLinks.get(key);
- if(cached&&cached.until>now)return cached.href;
- const result=await chatApi('chatDownloadLink',{
-  project:source.project,convo:source.convo,fileId:source.fileId,name:source.name
- });
- const href=chatMediaValidatedUrl(result.href);
- chatMediaLinks.set(key,{href,until:Date.now()+4*60*1000});
- if(chatMediaLinks.size>120)chatMediaLinks.delete(chatMediaLinks.keys().next().value);
- return href;
-}
 async function chatMediaLoadThumb(button){
  if(!button.isConnected||button.dataset.chatLoading==='1')return;
  button.dataset.chatLoading='1';
@@ -53,11 +48,11 @@ async function chatMediaLoadThumb(button){
  if(!media)return;
  const state=button.querySelector('.chatMediaLoading');
  try{
-  const href=await chatMediaLink(source);
+  const href=chatMediaStreamUrl(source);
   if(!button.isConnected)return;
   const ready=()=>{if(!button.isConnected)return;
    button.classList.add('chatMediaReady');button.classList.remove('chatMediaError')};
-  const fail=()=>{chatMediaLinks.delete(source.fileId);
+  const fail=()=>{
    if(!button.isConnected)return;
    button.classList.add('chatMediaError');
    if(state)state.textContent='Не удалось загрузить. Нажмите для просмотра.'};
@@ -65,11 +60,14 @@ async function chatMediaLoadThumb(button){
   media.addEventListener('loadedmetadata',ready,{once:true});
   media.addEventListener('error',fail,{once:true});
   media.referrerPolicy='no-referrer';
-  media.src=source.name&&button.dataset.chatKind==='video'?href+'#t=0.1':href;
+  media.src=button.dataset.chatKind==='video'?href+'#t=0.1':href;
   if(button.dataset.chatKind==='video'){
-   // Some mobile browsers defer the first frame until user gesture;
-   // the play overlay remains visible and opens the full viewer.
-   setTimeout(ready,2600);
+   // On mobile browsers first-frame decoding may wait for a tap. The video
+   // still opens in the full player; do not claim that it loaded when it has not.
+   setTimeout(()=>{if(!button.isConnected||button.classList.contains('chatMediaReady')||
+       button.classList.contains('chatMediaError'))return;
+    if(state)state.textContent='Нажмите, чтобы посмотреть видео';
+   },2500);
   }
  }catch(error){
   if(!button.isConnected)return;
