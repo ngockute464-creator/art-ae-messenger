@@ -29,7 +29,7 @@ GRANT SELECT,INSERT ON public.artae_read_baselines,public.artae_message_reads TO
 -- Never overwrite an established baseline on repeated migration.
 INSERT INTO public.artae_read_baselines(user_id,before_created_at)
  SELECT u.id,COALESCE((SELECT MAX(created_at) FROM public.artae_messages),0)
- FROM public.artae_users u ON CONFLICT(user_id) DO NOTHING;
+ FROM public.artae_users u WHERE true ON CONFLICT(user_id) DO NOTHING;
 INSERT INTO public.artae_schema_migrations(version)
  VALUES('003_message_reads') ON CONFLICT(version) DO NOTHING;
 COMMIT;
