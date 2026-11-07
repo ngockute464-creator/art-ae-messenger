@@ -66,6 +66,7 @@ jobs:
           node migration/tests/test-chat-media.mjs
           node migration/tests/test-project-video-and-copy-done.mjs
           node migration/tests/test-unified-files-preview.mjs
+          node migration/tests/test-pdfjs-runtime.mjs
           test -s public/vendor/pdfjs/pdf.mjs
           test -s public/vendor/pdfjs/pdf.worker.mjs
           node --check public/vendor/pdfjs/pdf.mjs
