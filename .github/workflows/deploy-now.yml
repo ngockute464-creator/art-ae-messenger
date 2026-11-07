@@ -1,0 +1,42 @@
+name: Publish ART-AE now
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artae-manual-deploy
+  cancel-in-progress: false
+
+jobs:
+  request-deployment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require isolated SSH credentials
+        shell: bash
+        env:
+          VPS_DEPLOY_KEY: ${{ secrets.ARTAE_DEPLOY_SSH_KEY }}
+          VPS_DEPLOY_HOSTKEY: ${{ secrets.ARTAE_DEPLOY_HOSTKEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VPS_DEPLOY_KEY"
+          test -n "$VPS_DEPLOY_HOSTKEY"
+          mkdir -m 700 ~/.ssh
+          printf '%s\n' "$VPS_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_DEPLOY_HOSTKEY" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Request verified release on Cloud4Box
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              artae-deploy@185.244.43.175 trigger
+          echo "Deployment requested. Check the VPS artae-auto.service journal for the result."
