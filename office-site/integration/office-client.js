@@ -174,7 +174,8 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    active.closeTimer=setTimeout(()=>{
     if(active&&active.closing){active.closing=false;closeButton.disabled=false;state.textContent='Не удалось закрыть документ. Повторите попытку.'}
    },30000);
-  }else if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close();
+  }else if(active?.mode==='preview')close();
+   else if(confirm('Закрыть редактор? Несохранённые изменения могут быть потеряны.'))close();
  });
  top.append(title,state,hint,saveButton,closeButton);
  const kind=/\.docx$/i.test(name)?'quire':'ledger';
