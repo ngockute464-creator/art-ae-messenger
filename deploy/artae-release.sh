@@ -53,6 +53,10 @@ stage() {
   printf '%s\n' "$sha" > "$dir/.release-commit"
   chown -R artae:artae "$dir"
   chmod -R go-w "$dir"
+  # Caddy runs as its own account and must traverse the release root and
+  # public directories. Keep source/API directories inaccessible to it.
+  chmod 755 "$dir"
+  find "$dir/public" -type d -exec chmod 755 {} +
   log "STAGED=$id"
   log 'Production was not changed.'
 }
