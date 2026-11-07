@@ -23,11 +23,12 @@ try{
  if(!bridge.includes('__ARTAE_PARENT_ORIGIN__'))throw Error('Bridge placeholder missing');
  bridge=bridge.replace('__ARTAE_PARENT_ORIGIN__',JSON.stringify(parent));
  writeFileSync(join(out,'artae-bridge.js'),bridge);
+ cpSync('server/office-readonly.js',join(out,'artae-readonly.js'));
  for(const kind of ['quire','ledger']){
   const p=join(out,kind,'index.html');let html=readFileSync(p,'utf8');
   const anchor=html.match(/<\/body\s*>/i)?.[0]||html.match(/<\/html\s*>/i)?.[0];
   if(!anchor)throw Error('Missing HTML anchor');
-  html=html.replace(anchor,'<script src="../artae-bridge.js" defer></script>\n'+anchor);
+  html=html.replace(anchor,'<script src="../artae-readonly.js" defer></script>\n<script src="../artae-bridge.js" defer></script>\n'+anchor);
   writeFileSync(p,html);
  }
  rmSync(join(out,'sw.js'),{force:true});

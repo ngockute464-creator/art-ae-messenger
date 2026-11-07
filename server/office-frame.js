@@ -5,6 +5,7 @@ const origin=location.origin;
 const ready=()=>window.L&&window.L.app&&typeof window.L.app.openFile==='function';
 let started=false;
 let saveBridge=null;
+const viewOnly=()=>window.ARTAE_OFFICE_READONLY;
 function installSaveBridge(name,enabled){
  if(saveBridge){window.L.saveFile=saveBridge.original;saveBridge=null}
  if(!enabled)return;
@@ -44,13 +45,21 @@ addEventListener('message',async event=>{
  }
 
  if(msg.type==='artae-office-save-command'){
-  try{if(!ready()||typeof window.L.app.save!=='function')throw Error('Сохранение недоступно');await window.L.app.save()}
+  try{
+   if(viewOnly()?.active)throw Error('В режиме просмотра сохранение запрещено');if(!ready()||typeof window.L.app.save!=='function')throw Error('Сохранение недоступно');await window.L.app.save()}
   catch(error){window.parent.postMessage({type:'artae-office-error',message:String(error?.message||error)},origin)}
   finally{window.parent.postMessage({type:'artae-office-save-command-done'},origin)}
   return;
  }
+ if(msg.type==='artae-office-find'){
+  if(!viewOnly()?.active)return;
+  try{window.L.ui.exec('find')}
+  catch(error){window.parent.postMessage({type:'artae-office-error',message:String(error?.message||error)},origin)}
+  return;
+ }
  if(msg.type==='artae-office-close'){
   try{
+   if(viewOnly()?.active)viewOnly().release();
    if(document.documentElement.dataset.app!=='quire'||!ready()||typeof window.L.app.closeDocument!=='function')
     throw Error('Безопасное закрытие недоступно');
    const closed=await window.L.app.closeDocument();
@@ -80,9 +89,13 @@ addEventListener('message',async event=>{
  if(typeof msg.name!=='string'||!msg.name.toLowerCase().endsWith(expected)||!(msg.buffer instanceof ArrayBuffer))return;
  try{
   const file=new File([msg.buffer],msg.name,{type:expected==='.docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  if(viewOnly()?.active)viewOnly().release();
+  if(msg.readonly===true&&(!viewOnly()||msg.remoteSave===true))
+   throw Error('Безопасный режим просмотра недоступен');
   await window.L.app.openFile(file);
   installSaveBridge(msg.name,msg.remoteSave===true);
-  window.parent.postMessage({type:'artae-office-opened'},origin);
+  if(msg.readonly===true)viewOnly().activate(document.documentElement.dataset.app);
+  window.parent.postMessage({type:'artae-office-opened',readonly:msg.readonly===true},origin);
  }catch(error){
   window.parent.postMessage({type:'artae-office-error',message:String(error?.message||error)},origin);
  }

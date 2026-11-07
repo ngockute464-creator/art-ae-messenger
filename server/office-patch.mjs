@@ -22,7 +22,7 @@ try{
  if(!print.includes(pdfAnchor))throw Error('Pinned Ledger PDF export has changed');
  print=print.replace(pdfAnchor,'      ui.busy(false);\n      if (opts.returnBlob) return pdf;\n      const name = (A.books[A.cur]');
  writeFileSync(printPath,print);
- const bridge='<script src="../artae-bridge.js" defer></script>';
+ const bridge='<script src="../artae-readonly.js" defer></script>\n<script src="../artae-bridge.js" defer></script>';
  for(const kind of ['quire','ledger']){
   const page='public/office/'+kind+'/index.html';
   let html=readFileSync(page,'utf8');
@@ -33,6 +33,7 @@ try{
   html=html.replace(anchor,bridge+'\n'+anchor);
   writeFileSync(page,html);
  }
+ copyFileSync('server/office-readonly.js','public/office/artae-readonly.js');
  copyFileSync('server/office-frame.js','public/office/artae-bridge.js');
  // Upstream service worker is deliberately disabled at this path; ART-AE owns the origin.
  rmSync('public/office/sw.js',{force:true});
