@@ -17,7 +17,8 @@ const voiceClient=readFileSync('server/voice-client.js','utf8');
 const transcriptClient=readFileSync('server/transcript-client.js','utf8');
 const chatFileClient=readFileSync('server/chat-file-client.js','utf8');
 const messageMenuClient=readFileSync('server/message-menu-client.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+messageMenuClient+'\nfunction cp(){','client and resize functions');
+const focusGuardClient=readFileSync('server/composer-focus-guard.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
