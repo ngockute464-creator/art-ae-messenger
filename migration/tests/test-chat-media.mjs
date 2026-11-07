@@ -16,13 +16,19 @@ assert.match(explorer,/save\.textContent='В файлы проекта'/);
 assert.match(api,/\/resources\/copy/);
 assert.match(api,/overwrite:'false'/);
 assert.match(api,/requireChatAttachmentMessage/);
+assert.match(api,/args.action==='chatMedia'/);
+assert.match(api,/new Response\(upstream.body/);
+assert.match(explorer,/signedUrl=chatMediaStreamUrl\(chatSource\)/);
+assert.match(client,/media.src=button.dataset.chatKind==='video'/);
+assert.ok(!client.includes('const href=await chatMediaLink(source)'));
+
 assert.ok(!client.includes('canvas.toDataURL')&&!client.includes('drawImage('));
 assert.match(client,/IntersectionObserver/);
 assert.match(client,/new MutationObserver/);
 assert.match(client,/preload="metadata"/);
 // Rendering old and new messages must distinguish media from other attachments.
 const sandbox={
- console,URL,Map,Set,Date,Promise,queueMicrotask:()=>{},
+ console,URL,URLSearchParams,Map,Set,Date,Promise,queueMicrotask:()=>{},
  root:{querySelectorAll:()=>[],addEventListener(){}},
  explorerKind(name){return /\.png$/i.test(name)?'image':/\.mp4$/i.test(name)?'video':'unknown'},
  esc(value){return String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')},
@@ -31,10 +37,15 @@ const sandbox={
 runInNewContext(client+';globalThis.makeMedia=chatMediaHtml;',sandbox);
 const f={id:'66666666-6666-4666-8666-666666666666',size:9999999,name:'photo.png'};
 const message={convo:'55555555-5555-4555-8555-555555555555',id:'77777777-7777-4777-8777-777777777777'};
+sandbox.project='11111111-1111-4111-8111-111111111111';
 assert.match(sandbox.makeMedia(f,message),/<img alt="" loading="lazy">/);
 assert.match(sandbox.makeMedia({...f,name:'movie.mp4'},message),/<video muted playsinline preload="metadata"/);
 assert.equal(sandbox.makeMedia({...f,name:'notes.txt'},message),'');
 assert.doesNotMatch(sandbox.makeMedia({...f,name:'a"b.png'},message),/data-chat-name="a"b\.png"/);
+const uri=sandbox.chatMediaStreamUrl({project:sandbox.project,convo:message.convo,fileId:f.id,name:f.name,messageId:message.id});
+assert.ok(String(uri).startsWith('/.netlify/functions/files-explorer?action=chatMedia&'));
+assert.ok(!String(uri).includes('https://downloader.'));
+
 
 // Execute actual API code with its network boundary mocked. No live Disk or DB.
 const UUIDS={
@@ -51,7 +62,7 @@ const apiSource=api.replace(/^import .*;\r?\n/gm,'')
  .replace('export default async function handler(request){','async function handler(request){')+
  '\n;globalThis.handle=handler;';
 const mocks={
- URL,Request,Response,AbortSignal,Uint8Array,TextDecoder,TextEncoder,console,
+ URL,Request,Response,Headers,AbortSignal,Uint8Array,TextDecoder,TextEncoder,console,
  setTimeout,clearTimeout,randomUUID:()=>UUIDS.file,
  process:{env:{YANDEX_DISK_TOKEN:'test-only-secret',ARTAE_NEXT_ALLOW_DISK_WRITES:'1'}},
  getSession:async()=>sessionEnabled?{user:{id:UUIDS.project,name:'Tester'}}:null,
@@ -66,6 +77,15 @@ const mocks={
  },
  fetch:async(uri,opts)=>{
   const url=new URL(uri);
+  if(url.pathname==='/signed-example'){
+   const content=new TextEncoder().encode('ORIGINAL-FILE-1234567890');
+   const range=opts.headers?.Range;
+   calls.push({method:opts.method,path:url.pathname,range});
+   return new Response(content,{status:range?206:200,headers:{
+    'Content-Type':'application/octet-stream',
+    'Content-Range':'bytes 0-23/9000000','Accept-Ranges':'bytes'
+   }});
+  }
   assert.equal(opts.headers.Authorization,'OAuth test-only-secret');
   const endpoint=url.pathname;calls.push({method:opts.method,path:endpoint,params:url.searchParams});
   let status=200,value={};
@@ -123,4 +143,31 @@ sessionEnabled=false;
 assert.equal((await invoke('chatCopyToProject')).status,401);
 sessionEnabled=true;
 assert.equal((await invoke('chatCopyToProject',{},'https://evil.example')).status,403);
-console.log('CHAT_MEDIA_TEST_OK preview=true video=true access=true copy_no_reencode=true collision=true traversal=true');
+// The real handler must stream original bytes with correct MIME and range
+// semantics, and never accept media URLs without a live session and marker.
+const mediaRequest=(name='clip.mp4',range=null,extra={})=>{
+ const args=new URLSearchParams({action:'chatMedia',project:UUIDS.project,
+  convo:UUIDS.convo,fileId:UUIDS.file,messageId:UUIDS.message,name,...extra});
+ return new Request(validOrigin+'/.netlify/functions/files-explorer?'+args,{
+  method:'GET',headers:range?{Range:range}:{}
+ });
+};
+let r=await mocks.handle(mediaRequest());
+assert.equal(r.status,200);
+assert.equal(r.headers.get('content-type'),'video/mp4');
+assert.equal(r.headers.get('content-disposition'),'inline');
+assert.equal(r.headers.get('cache-control'),'private, no-store');
+assert.equal(new TextDecoder().decode(await r.arrayBuffer()),'ORIGINAL-FILE-1234567890');
+r=await mocks.handle(mediaRequest('clip.mp4','bytes=0-23'));
+assert.equal(r.status,206);
+assert.equal(r.headers.get('content-range'),'bytes 0-23/9000000');
+assert.equal(new TextDecoder().decode(await r.arrayBuffer()),'ORIGINAL-FILE-1234567890');
+assert.ok(calls.some(c=>c.path==='/signed-example'&&c.range==='bytes=0-23'));
+assert.equal((await mocks.handle(mediaRequest('clip.mp4','bytes=0-10,20-30'))).status,416);
+assert.equal((await mocks.handle(mediaRequest('clip.mp4',null,{messageId:UUIDS.file}))).status,404);
+markerText='wrong';
+assert.equal((await mocks.handle(mediaRequest())).status,403);
+markerText=marker;
+sessionEnabled=false;
+assert.equal((await mocks.handle(mediaRequest())).status,401);
+console.log('CHAT_MEDIA_TEST_OK preview=true media_stream=true byte_range=true access=true copy_no_reencode=true collision=true traversal=true');
