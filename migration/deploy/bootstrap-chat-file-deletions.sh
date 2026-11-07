@@ -32,7 +32,8 @@ runuser -u postgres -- pg_dump -Fc -d artae > "$BACKUP"
  echo '[cleanup] Backup verification failed' >&2; exit 1;
 }
 echo '[cleanup] Applying migration 006 (creates only queue table and index)'
-runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -d artae -f "$SQL"
+# Root opens the mode-0600 temporary SQL; postgres receives only stdin.
+runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -d artae < "$SQL"
 STATUS=$(runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -At -d artae \
  -c "SELECT count(*) FROM public.artae_schema_migrations WHERE version='006_chat_file_deletions'")
 [[ "$STATUS" == 1 ]] || { echo '[cleanup] Migration ledger verification failed' >&2; exit 1; }
