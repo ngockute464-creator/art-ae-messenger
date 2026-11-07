@@ -15,6 +15,13 @@ const safeCommands=new Set([
 ]);
 function preventMutation(event){
  if(!active)return;
+ // Search/find dialogs must remain fully usable, including Android keyboard.
+ // Only the original editor grid / formula surface is locked against typing.
+ const target=event.target;
+ const tag=target?.tagName;
+ const ledgerInput=window.L?.grid?.input;
+ if((tag==='INPUT'||tag==='TEXTAREA')&&target!==ledgerInput&&target?.id!=='fbinput')
+  return;
  if(event.type==='keydown'){
   const key=event.key||'',ctrl=event.ctrlKey||event.metaKey;
   const block=destructive.has(key)||(ctrl&&shortcutEdits.has(key.toLowerCase()))||
