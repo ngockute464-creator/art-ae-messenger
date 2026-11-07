@@ -74,8 +74,13 @@ const server=createServer(async(req,res)=>{
     const response=await handler(request);
     if(!(response instanceof Response))throw Error('Invalid API response');
     const out={};
+    // Preserve precise byte counts only on the authenticated media route.
+    const isChatMedia=url.pathname===PREFIX+'files-explorer'&&
+      url.searchParams.get('action')==='chatMedia';
     for(const [key,value] of response.headers){
-      if(!['connection','transfer-encoding','content-length','set-cookie'].includes(key))out[key]=value;
+      if(['connection','transfer-encoding','set-cookie'].includes(key))continue;
+      if(key==='content-length'&&!isChatMedia)continue;
+      out[key]=value;
     }
     const cookies=response.headers.getSetCookie();
     if(cookies.length)out['Set-Cookie']=cookies;

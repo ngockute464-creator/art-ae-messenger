@@ -233,7 +233,9 @@ function chatObjectName(id,name){
 }
 
 export default async function handler(request){
- if(!['GET','POST'].includes(request.method))return response({error:'Method not allowed'},405);
+ if(!['GET','POST','HEAD'].includes(request.method)||
+    (request.method==='HEAD'&&new URL(request.url).searchParams.get('action')!=='chatMedia'))
+  return response({error:'Method not allowed'},405);
  if(request.method==='POST'&&!isOrigin(request))return response({error:'Недопустимый запрос'},403);
  try{
   const session=await getSession(request);if(!session)return response({error:'Требуется вход'},401);
@@ -276,7 +278,7 @@ export default async function handler(request){
     const link=await disk('GET','/resources/download',{path});
     return response({href:transferUrl(link.href).toString(),name,size:metadata.size,mimeType:metadata.mime_type||''});
    }
-   if(args.action==='chatMedia'&&request.method==='GET'){
+   if(args.action==='chatMedia'&&['GET','HEAD'].includes(request.method)){
     // The browser loads this same-origin URL with the existing HttpOnly
     // session cookie. The source file is streamed, never buffered or resized.
     await requireChatAttachmentMessage(args.convo,args.messageId,args.fileId,name);
@@ -284,6 +286,16 @@ export default async function handler(request){
     if(!mime)throw Object.assign(Error('Формат не поддерживает предпросмотр'),{status:415});
     const source=await disk('GET','/resources',{path,fields:'type,size'});
     if(source.type!=='file')throw Object.assign(Error('Вложение не найдено'),{status:404});
+    const fullSize=Number(source.size);
+    if(!Number.isSafeInteger(fullSize)||fullSize<0)
+     throw Object.assign(Error('Недопустимый размер файла'),{status:502});
+    if(request.method==='HEAD'){
+     return new Response(null,{status:200,headers:{
+      'Content-Type':mime,'Content-Length':String(fullSize),
+      'Accept-Ranges':'bytes','Content-Disposition':'inline',
+      'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'
+     }});
+    }
     const rawRange=request.headers.get('range');
     if(rawRange&&!/^bytes=(?:\d+-\d*|-\d+)$/.test(rawRange))
      return new Response(null,{status:416,headers:{
@@ -309,14 +321,28 @@ export default async function handler(request){
     });
     if(upstream.status===206){
      const range=upstream.headers.get('content-range');
-     if(!range||!/^bytes \d+-\d+\/(?:\d+|\*)$/.test(range)){
+     const bounds=range?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
+     if(!bounds||!Number.isSafeInteger(Number(bounds[1]))||
+        !Number.isSafeInteger(Number(bounds[2]))||
+        Number(bounds[2])<Number(bounds[1])||
+        Number(bounds[3])!==fullSize){
       await upstream.body.cancel().catch(()=>{});
       throw Object.assign(Error('Некорректный диапазон медиафайла'),{status:502});
      }
+     const partLength=Number(bounds[2])-Number(bounds[1])+1;
+     const declared=upstream.headers.get('content-length');
+     if(declared!==null&&Number(declared)!==partLength){
+      await upstream.body.cancel().catch(()=>{});
+      throw Object.assign(Error('Некорректная длина части медиафайла'),{status:502});
+     }
      headers.set('Content-Range',range);
+     headers.set('Content-Length',String(partLength));
+    }else{
+     if(upstream.headers.get('accept-ranges')!=='bytes')headers.delete('Accept-Ranges');
+     const declared=upstream.headers.get('content-length');
+     if(declared!==null&&Number.isSafeInteger(Number(declared))&&Number(declared)>=0)
+      headers.set('Content-Length',declared);
     }
-    // Do not set Content-Length: Node's response bridge uses chunked transfer.
-    // The Content-Range header is preserved for video seeking and resumption.
     return new Response(upstream.body,{status:upstream.status,headers});
    }
    if(args.action==='chatCopyToProject'&&request.method==='POST'){
