@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,12 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
+          node --check server/unread-client.js
+          node --check server/unread-patch.mjs
+          node --check migration/runtime/unread.mjs
+          test -s migration/sql/003_message_reads.sql
+          grep -q 'artae-message-counts' public/styles.css
+          grep -q 'artaeScanReadMessages' public/app.js
           node --check vps-server.mjs
           for name in http-server auth sync postgres pins files-explorer voice voice-transcript project-rename; do
             test -s "migration/runtime/$name.mjs"
