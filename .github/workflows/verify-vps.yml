@@ -80,6 +80,13 @@ jobs:
             node --check "netlify/functions/$module.mjs"
           done
 
+      - name: Check pinned Web Push transport with Node 24
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/artae-push-ci
+          npm install --prefix /tmp/artae-push-ci --no-save --ignore-scripts --no-audit --no-fund web-push@3.6.7
+          node -e "const w=require('/tmp/artae-push-ci/node_modules/web-push'); const k=w.generateVAPIDKeys(); if(!k.publicKey||!k.privateKey)process.exit(1); console.log('PUSH_TRANSPORT_OK')"
+
       - name: Check deployment script syntax
         run: |
           bash -n deploy/artae-release.sh
