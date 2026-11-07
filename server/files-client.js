@@ -294,7 +294,7 @@ function explorerZoomableImage(media,body,bar){
  const down=document.createElement('button'),reset=document.createElement('button'),up=document.createElement('button');
  for(const [el,label,title] of [[down,'−','Уменьшить'],[reset,'100%','Сбросить масштаб'],[up,'+','Увеличить']]){
   el.type='button';el.className='btn small';el.textContent=label;el.title=title;zoomTools.append(el)}
- bar.insertBefore(zoomTools,bar.lastElementChild);
+ bar.append(zoomTools);
  viewport.append(media);body.append(viewport);
  let scale=1,x=0,y=0,dragging=false,lastX=0,lastY=0;
  const apply=()=>{scale=Math.max(1,Math.min(8,scale));if(scale===1){x=0;y=0}
@@ -328,17 +328,18 @@ async function explorerPreview(path,name,mime,chatSource=null){
  const dialog=document.createElement('dialog');
  dialog.className='filePreviewDialog';
  dialog.setAttribute('aria-label','Просмотр файла '+name);
- dialog.innerHTML='<div class="filePreviewHeader"><strong class="filePreviewTitle"></strong><button class="btn small" type="button" aria-label="Закрыть просмотр">✕</button></div><div class="filePreviewBody">Загрузка…</div>';
+ dialog.innerHTML='<div class="filePreviewHeader"><strong class="filePreviewTitle"></strong><button class="btn small filePreviewClose" type="button" aria-label="Закрыть просмотр">✕</button></div><div class="filePreviewToolbar" role="toolbar" aria-label="Действия с файлом"></div><div class="filePreviewBody">Загрузка…</div>';
  dialog.querySelector('.filePreviewTitle').textContent=name;
  const body=dialog.querySelector('.filePreviewBody');
- const close=dialog.querySelector('button');
+ const close=dialog.querySelector('.filePreviewClose');
+ const toolbar=dialog.querySelector('.filePreviewToolbar');
  if(chatSource){
   const save=document.createElement('button');
   save.type='button';save.className='btn small chatMediaSaveAction';
   save.textContent='В файлы проекта';
   save.setAttribute('aria-label','Сохранить оригинал в файлы проекта');
   save.addEventListener('click',()=>{void chatMediaCopyPicker(chatSource)});
-  close.before(save);
+  toolbar.append(save);
  }
  let objectUrl=null;
  function dispose(){if(objectUrl)URL.revokeObjectURL(objectUrl);dialog.remove()}
@@ -370,7 +371,7 @@ async function explorerPreview(path,name,mime,chatSource=null){
    }else media.src=signedUrl||objectUrl;
    if(kind==='audio'||kind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}
    if(kind==='image')media.alt=name;
-   if(kind==='image')explorerZoomableImage(media,body,dialog.querySelector('.filePreviewHeader'));
+   if(kind==='image')explorerZoomableImage(media,body,toolbar);
    else body.append(media);
   }
  }catch(e){if(dialog.open)body.textContent=e.message||'Не удалось показать файл'}

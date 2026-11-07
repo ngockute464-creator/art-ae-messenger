@@ -266,4 +266,55 @@ css+='\n'+String.raw`
 .filePreviewHeader .chatMediaSaveAction{white-space:nowrap}
 @media(max-width:650px){.chatMediaThumb{width:min(100%,380px)}.chatMediaVisual{max-height:215px}.chatMediaVisual img,.chatMediaVisual video{max-height:215px}.chatMediaPickerFooter{padding:10px}}
 `;
+css+='\n'+String.raw`
+/* Dedicated viewer header and toolbar. Never force long filenames into a
+   one-character column beside media controls on narrow Android screens. */
+.filePreviewDialog[open]{
+ display:flex;flex-direction:column;box-sizing:border-box;
+ width:min(900px,96vw);max-width:96vw;
+ max-height:92vh;max-height:92dvh;overflow:hidden;
+}
+.filePreviewDialog .filePreviewHeader{
+ display:flex;flex:0 0 auto;min-width:0;min-height:50px;
+ align-items:center;gap:10px;padding:10px 14px;box-sizing:border-box;
+}
+.filePreviewDialog .filePreviewTitle{
+ display:block;flex:1 1 auto;min-width:0;max-width:100%;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+ overflow-wrap:normal;word-break:normal;line-height:1.35;
+}
+.filePreviewDialog .filePreviewClose{flex:0 0 auto;margin-left:auto}
+.filePreviewDialog .filePreviewToolbar{
+ display:flex;flex:0 0 auto;align-items:center;justify-content:flex-end;
+ flex-wrap:wrap;gap:8px;box-sizing:border-box;
+ min-width:0;padding:8px 14px;border-bottom:1px solid #dce1e9;
+}
+.filePreviewDialog .filePreviewToolbar:empty{display:none}
+.filePreviewDialog .chatMediaSaveAction{flex:0 0 auto;white-space:nowrap;margin-right:auto}
+.filePreviewDialog .fileZoomTools{
+ display:flex;flex:0 0 auto;align-items:center;gap:4px;
+ margin-left:auto;margin-right:0;
+}
+.filePreviewDialog .fileZoomTools button{flex:0 0 auto;min-width:36px}
+.filePreviewDialog .filePreviewBody{
+ flex:1 1 auto;min-width:0;min-height:0;max-height:none;
+ box-sizing:border-box;overflow:auto;
+}
+.filePreviewDialog .fileImageViewport{
+ width:100%;max-width:100%;box-sizing:border-box;
+ height:min(66vh,720px);min-height:180px;
+}
+@media(max-width:650px){
+ .filePreviewDialog[open]{
+  width:calc(100vw - 24px);max-width:calc(100vw - 24px);
+  max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);
+ }
+ .filePreviewDialog .filePreviewHeader{padding:10px 12px;min-height:48px}
+ .filePreviewDialog .filePreviewTitle{font-size:15px}
+ .filePreviewDialog .filePreviewToolbar{padding:8px 10px;gap:6px}
+ .filePreviewDialog .chatMediaSaveAction{font-size:12px}
+ .filePreviewDialog .filePreviewBody{padding:8px}
+ .filePreviewDialog .fileImageViewport{height:min(62vh,570px);height:min(62dvh,570px);min-height:180px}
+}
+`;
 writeFileSync(cssFile,css);
