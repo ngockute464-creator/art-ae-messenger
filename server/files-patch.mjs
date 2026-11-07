@@ -93,6 +93,13 @@ if(!chatUploadStub)throw Error('Chat attachment placeholder not found');
 app=app.replace(chatUploadStub[0],"else if(action==='upload')chatFilePick();");
 replace('${voiceMessageHtml(m)}','${chatFileMessageHtml(m)}','chat attachment message renderer');
 replace('${getDraft().files.map((f,i)=>','${chatFileDraftHtml()}${getDraft().files.map((f,i)=>','chat attachment draft chips');
+// A freshly rendered chat restores its scroll position in requestAnimationFrame.
+// That programmatic scroll fires 'scroll' and used to close the message menu
+// immediately after a click (visible as a brief flash on desktop and Safari).
+// Keep dismissal by outside click and Escape, but do not dismiss on any scroll.
+replace("root.addEventListener('scroll',e=>{if(openMenu!==null && e.target?.id==='msgscroll'){openMenu=null;render()}},true);",
+        "/* Message menu remains open during render-driven scroll. Outside click and Escape close it. */",
+        'message menu survives programmatic scroll');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
