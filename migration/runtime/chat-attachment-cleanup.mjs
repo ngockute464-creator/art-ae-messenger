@@ -109,6 +109,8 @@ async function dispatch(job){
  }
 }
 export async function pumpChatAttachmentCleanup(){
+ // Never mutate remote Disk in a migration/staging environment.
+ if(process.env.ARTAE_NEXT_ALLOW_DISK_WRITES!=='1')return;
  if(busy||now()<disabledUntil)return;
  busy=true;
  try{

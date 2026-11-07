@@ -29,7 +29,7 @@ const run=async({shared=false,fail=false,missing=false,invalidFolder=false}={})=
   file_name:'Изображение 10.jpg',project_id:projectId,attempts:1};
  const sandbox={
   URL,AbortSignal,console:{warn:(...x)=>warnings.push(x.join(' ')),error:(...x)=>warnings.push(x.join(' '))},
-  process:{env:{YANDEX_DISK_TOKEN:'FAKE_TOKEN_FOR_TESTS'}},
+  process:{env:{YANDEX_DISK_TOKEN:'FAKE_TOKEN_FOR_TESTS',ARTAE_NEXT_ALLOW_DISK_WRITES:'1'}},
   setTimeout(){return {unref(){}}},setInterval(){return {unref(){}}},clearInterval(){},
   query:async(query,params=[])=>{
    if(query.includes('to_regclass'))return {rows:[{name:missing?null:'public.artae_chat_file_deletions'}]};
