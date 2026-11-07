@@ -445,6 +445,42 @@ document.addEventListener('keydown',event=>{
  if(event.key==='Escape')for(const menu of document.querySelectorAll('.fileMoreMenu[open]'))menu.open=false;
 });
 
+// Single-weight, local vector icons in the project file explorer.
+// Deliberately avoid platform emoji and heavyweight Office logos.
+function explorerFileTypeIcon(name,mime=''){
+ const ext=(name.split('.').pop()||'').toLowerCase(),kind=explorerKind(name,mime);
+ let type='file',label='Файл',paths='';
+ const page='<path d="M7 2.5h7l5 5v14H5v-19h2Z"/><path d="M14 2.5v5h5"/>';
+ if(kind==='image'){
+  type='image';label='Изображение';
+  paths='<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-3 5 5"/>';
+ }else if(kind==='video'){
+  type='video';label='Видео';
+  paths='<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 6 3-6 3Z"/>';
+ }else if(['doc','docx','odt','rtf'].includes(ext)){
+  type='word';label='Документ Word';
+  paths=page+'<path d="m8 12 1.3 5 1.7-3 1.7 3L14 12"/>';
+ }else if(['xls','xlsx','ods'].includes(ext)){
+  type='excel';label='Таблица Excel';
+  paths=page+'<path d="m8 12 5 5m0-5-5 5"/>';
+ }else if(ext==='pdf'){
+  type='pdf';label='PDF';
+  paths=page+'<text x="7" y="17" font-size="6" font-weight="700" fill="currentColor" stroke="none">PDF</text>';
+ }else if(['ppt','pptx','odp'].includes(ext)){
+  type='slides';label='Презентация';
+  paths='<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v5m-4 0h8"/><path d="m10 8 5 2.5-5 2.5Z"/>';
+ }else if(ext==='md'||ext==='markdown'){
+  type='markdown';label='Markdown';
+  paths=page+'<path d="m8 13 2 2-2 2m5-4-1 4"/>';
+ }else if(kind==='text'){
+  type='text';label='Текстовый файл';
+  paths=page+'<path d="M8 11h8M8 14h8M8 17h5"/>';
+ }else{paths=page+'<path d="M8 12h8M8 15h6"/>'}
+ return '<span class="projectFileTypeIcon projectFileTypeIcon-'+type+'" title="'+label+
+  '" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+  'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+paths+'</svg></span>';
+}
+
 function filesView(){
  if(explorer.project!==project)return '<section class="pane"><p class="help">Загрузка…</p></section>';
  const back=explorer.path?'<button type="button" class="btn small" data-act="filesUp">↑ На уровень выше</button>':'';
@@ -458,7 +494,7 @@ function filesView(){
   const path=esc(item.path),name=esc(item.name);
   const editAction=canOffice?'<button type="button" data-act="officeEdit" data-project="'+esc(String(explorer.project))+'" data-path="'+path+'" data-name="'+name+'" role="menuitem">Редактировать</button>':'';
   const menu='<details class="fileMoreMenu"><summary title="Действия с файлом" aria-label="Действия с файлом '+name+'">⋯</summary><div class="fileMorePanel" role="menu" aria-label="Действия с файлом">'+editAction+'<button type="button" data-act="filesDownload" data-path="'+path+'" data-name="'+name+'" role="menuitem">Скачать</button><button type="button" data-act="filesDelete" data-path="'+path+'" data-name="'+name+'" role="menuitem" class="fileMoreDanger">Удалить</button></div></details>';
-  return '<div class="fileEntry">'+menu+'<button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+path+'" data-name="'+name+'" data-mime="'+esc(item.mimeType||'')+'" title="Просмотреть файл">'+name+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn filePinBtn '+(pinned?'is-pinned':'is-unpinned')+'" data-act="pinFile" data-path="'+path+'" title="'+(pinned?'Открепить файл':'Закрепить в проекте')+'" aria-label="'+(pinned?'Открепить ':'Закрепить ')+name+'" aria-pressed="'+(pinned?'true':'false')+'"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16 9V4l1-1V2H7v1l1 1v5l-2 2v2h5v9h2v-9h5v-2l-2-2z"/></svg></button></div>';
+  return '<div class="fileEntry">'+menu+explorerFileTypeIcon(item.name,item.mimeType||'')+'<button type="button" class="fileEntryNameAction" data-act="filesPreview" data-path="'+path+'" data-name="'+name+'" data-mime="'+esc(item.mimeType||'')+'" title="Просмотреть файл">'+name+'</button><span class="fileEntryMeta">'+esc(size)+'</span><button type="button" class="fileActionBtn filePinBtn '+(pinned?'is-pinned':'is-unpinned')+'" data-act="pinFile" data-path="'+path+'" title="'+(pinned?'Открепить файл':'Закрепить в проекте')+'" aria-label="'+(pinned?'Открепить ':'Закрепить ')+name+'" aria-pressed="'+(pinned?'true':'false')+'"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M16 9V4l1-1V2H7v1l1 1v5l-2 2v2h5v9h2v-9h5v-2l-2-2z"/></svg></button></div>';
 
  }).join('');
  const upload=explorerUploading&&explorerUploading.project===explorer.project&&explorerUploading.path===explorer.path;
