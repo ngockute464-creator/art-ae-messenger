@@ -47,4 +47,6 @@ jobs:
           done
 
       - name: Check deployment script syntax
-        run: bash -n deploy/artae-release.sh
+        run: |
+          bash -n deploy/artae-release.sh
+          bash -n deploy/artae-auto.sh
