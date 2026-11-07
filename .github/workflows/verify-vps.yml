@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview]
+    branches: [netlify-preview, migration/local-postgres]
   workflow_dispatch:
 
 permissions:
@@ -41,6 +41,17 @@ jobs:
           test -s public/app.js
           node --check public/app.js
           node --check vps-server.mjs
+          for name in http-server auth sync postgres pins files-explorer voice voice-transcript project-rename; do
+            test -s "migration/runtime/$name.mjs"
+            node --check "migration/runtime/$name.mjs"
+          done
+          if grep -nE 'SUPABASE_URL|SUPABASE_SECRET_KEY|/rest/v1/' migration/runtime/*.mjs; then
+            echo "Forbidden remote database dependency in production API"
+            exit 1
+          fi
+          test -s public/office/quire/index.html
+          test -s public/office/ledger/index.html
+          test -s public/office/artae-bridge.js
           for module in auth sync pins files-explorer realtime-token voice voice-transcript; do
             test -f "netlify/functions/$module.mjs"
             node --check "netlify/functions/$module.mjs"
@@ -50,3 +61,4 @@ jobs:
         run: |
           bash -n deploy/artae-release.sh
           bash -n deploy/artae-auto.sh
+          bash -n migration/deploy/switch-local.sh
