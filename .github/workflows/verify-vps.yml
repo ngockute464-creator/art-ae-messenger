@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files]
   workflow_dispatch:
 
 permissions:
@@ -57,6 +57,7 @@ jobs:
           grep -q "artae_push_deliveries" migration/runtime/sync.mjs
           node migration/tests/test-pwa-update.mjs
           node migration/tests/test-sw-install.mjs
+          node migration/tests/test-message-erasure-and-files.mjs
           node migration/tests/test-pwa-runtime.mjs
           node migration/tests/check-ui-markup.mjs
           node --check server/unread-client.js
@@ -99,7 +100,7 @@ jobs:
 
 
   verify-unread-postgres:
-    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push'
+    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -140,3 +141,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f migration/sql/004_web_push.sql
           psql -v ON_ERROR_STOP=1 -f migration/sql/004_web_push.sql
           psql -v ON_ERROR_STOP=1 -f migration/tests/push-fixtures.sql
+          psql -v ON_ERROR_STOP=1 -f migration/tests/seed-deleted-message.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/005_erase_deleted_text.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/005_erase_deleted_text.sql
+          psql -v ON_ERROR_STOP=1 -f migration/tests/verify-deleted-text.sql

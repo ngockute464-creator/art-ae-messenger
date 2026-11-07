@@ -43,14 +43,12 @@ async function chatApi(action,params,binary){
 async function chatUploadEntry(entry,context){
  if(entry.uploaded)return;
  const params={project:context.project,convo:context.convo,fileId:entry.id,name:entry.file.name};
- if(entry.file.size<=3*1024*1024)await chatApi('chatUpload',params,entry.file);
- else{
-  const link=await chatApi('chatUploadLink',params),url=new URL(link.href);
-  if(url.protocol!=='https:'||!/(^|\.)(yandex\.(ru|net)|yandexcloud\.net)$/.test(url.hostname))throw Error('Недопустимая ссылка Яндекс Диска');
-  let res;try{res=await fetch(url.href,{method:link.method==='POST'?'POST':'PUT',body:entry.file,credentials:'omit'})}
-  catch{throw Error('Браузер заблокировал прямую загрузку большого файла (CORS)')}
-  if(!res.ok)throw Error('Яндекс Диск отклонил загрузку (HTTP '+res.status+')');
- }
+ const link=await chatApi('chatUploadLink',params),url=new URL(link.href);
+ if(url.protocol!=='https:'||!/(^|\.)(yandex\.(ru|net)|yandexcloud\.net)$/.test(url.hostname))throw Error('Недопустимая ссылка Яндекс Диска');
+ let res;
+ try{res=await fetch(url.href,{method:link.method==='POST'?'POST':'PUT',body:entry.file,credentials:'omit'})}
+ catch{throw Error('Браузер заблокировал прямую загрузку файла (CORS)')}
+ if(!res.ok)throw Error('Яндекс Диск отклонил загрузку (HTTP '+res.status+')');
  entry.uploaded=true;
 }
 async function chatFileSend(event){

@@ -195,35 +195,23 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    void (async()=>{
     let ok=false,error='';
     try{
-     const query=new URLSearchParams({action:'officeSave',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken});
-     let result={};
-     if(msg.blob.size<=3*1024*1024){
-      const response=await fetch('/.netlify/functions/files-explorer?'+query,{
-       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream'},body:msg.blob
-      });
-      try{result=await response.json()}catch{}
-      if(!response.ok)throw Error(result.error||'Ошибка сохранения (HTTP '+response.status+')');
-     }else{
-      // Keep large binary bytes out of Netlify's body-size-limited Functions.
-      const auth=await fetch('/.netlify/functions/files-explorer',{
-       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({action:'officeSaveLink',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
-      });
-      let signed={};try{signed=await auth.json()}catch{}
-      if(!auth.ok)throw Error(signed.error||'Не удалось подтвердить версию документа');
-      let uploaded;
-      try{uploaded=await fetch(signed.href,{method:signed.method||'PUT',body:msg.blob,credentials:'omit'})}
-      catch{throw Error('Браузер заблокировал запись большого документа в Яндекс Диск (CORS). Изменения остались в редакторе. Скачайте копию через меню «Файл».')}
-      if(!uploaded.ok)throw Error('Яндекс Диск не принял документ (HTTP '+uploaded.status+')');
-      const commit=await fetch('/.netlify/functions/files-explorer',{
-       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({action:'officeSaveCommit',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
-      });
-      let finalResult={};try{finalResult=await commit.json()}catch{}
-      if(!commit.ok)throw Error(finalResult.error||'Не удалось завершить сохранение документа');
-      result=finalResult;
-      /* The commit endpoint is the only operation allowed to replace the original. */
-     }
+     // Stage and commit the original document without any file size threshold.
+     const auth=await fetch('/.netlify/functions/files-explorer',{
+      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'officeSaveLink',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
+     });
+     let signed={};try{signed=await auth.json()}catch{}
+     if(!auth.ok)throw Error(signed.error||'Не удалось подтвердить версию документа');
+     let uploaded;
+     try{uploaded=await fetch(signed.href,{method:signed.method||'PUT',body:msg.blob,credentials:'omit'})}
+     catch{throw Error('Браузер заблокировал запись документа в Яндекс Диск (CORS). Изменения остались в редакторе. Скачайте копию через меню «Файл».')}
+     if(!uploaded.ok)throw Error('Яндекс Диск не принял документ (HTTP '+uploaded.status+')');
+     const commit=await fetch('/.netlify/functions/files-explorer',{
+      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'officeSaveCommit',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
+     });
+     let result={};try{result=await commit.json()}catch{}
+     if(!commit.ok)throw Error(result.error||'Не удалось завершить сохранение документа');
      if(typeof result.modified!=='string'||!result.modified)throw Error('Сервер не подтвердил новую версию документа');
      ctx.version=result.modified;ok=true;state.textContent='Сохранено на Яндекс Диске';
      if(typeof explorerLoad==='function'&&projectId===project&&explorer?.path===path.split('/').slice(0,-1).join('/'))void explorerLoad(explorer.path);

@@ -17,7 +17,7 @@ const avatarOk=x=>x===null||(typeof x==='string'&&x.length<=80000&&/^data:image\
 const originOk=req=>{try{return new URL(req.headers.get('origin')).origin===new URL(req.url).origin}catch{return false}};
 const projectView=r=>({id:r.id,name:r.name,folderPath:r.folder_path,avatar:r.avatar,createdAt:Number(r.created_at),createdBy:r.created_by,updatedAt:r.updated_at===null?null:Number(r.updated_at)});
 const convoView=r=>({id:r.id,name:r.name,project:r.project_id,avatar:r.avatar,createdAt:Number(r.created_at),updatedAt:r.updated_at===null?null:Number(r.updated_at)});
-const messageView=r=>({id:r.id,convo:r.conversation_id,authorId:r.author_id,who:r.author_name,text:r.body,time:Number(r.created_at),editedAt:r.edited_at===null?null:Number(r.edited_at),deletedAt:r.deleted_at===null?null:Number(r.deleted_at)});
+const messageView=r=>({id:r.id,convo:r.conversation_id,authorId:r.author_id,who:r.author_name,text:r.deleted_at===null?r.body:'',time:Number(r.created_at),editedAt:r.edited_at===null?null:Number(r.edited_at),deletedAt:r.deleted_at===null?null:Number(r.deleted_at)});
 
 async function one(table,id) {
   if(!uuid(id))return null;
@@ -296,7 +296,7 @@ export default async function handler(req) {
       const {rows:[updated]}=await query(
         isEdit?
           'UPDATE public.artae_messages SET body=$4,edited_at=$5 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *':
-          'UPDATE public.artae_messages SET deleted_at=$4 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $5::bigint RETURNING *',
+          'UPDATE public.artae_messages SET body=\'\',deleted_at=$4 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $5::bigint RETURNING *',
         isEdit?
           [body.id,body.convo,session.user.id,value,stamp,revision]:
           [body.id,body.convo,session.user.id,stamp,revision]

@@ -4,7 +4,7 @@ let explorerRequest=0;
 let explorerUploading=null;
 let explorerDeleting=false;
 let explorerPolling=false;
-const explorerLegacyTransferLimit=3*1024*1024;
+// Direct transfer for all file sizes; proxy remains a safety-bound legacy route.
 async function explorerApi(action,params){
  const api='/.netlify/functions/files-explorer';
  const options={credentials:'same-origin',cache:'no-store'};
@@ -185,13 +185,13 @@ async function explorerUpload(file){
  if(view==='files'||railFileVisible())render();
  explorerUploadUpdate();
  try{
-  try{await (file.size<=explorerLegacyTransferLimit?explorerSendUpload(file,id,path,overwrite):explorerSendDirect(file,id,path,overwrite))}
+  try{await (explorerSendDirect(file,id,path,overwrite))}
   catch(error){
    if(error.status!==409||overwrite)throw error;
    if(!confirm('Файл «'+file.name+'» уже существует. Заменить его?'))return;
    overwrite=true;
    if(explorerUploading){explorerUploading.percent=0;explorerUploading.processing=false;explorerUploadUpdate()}
-   await (file.size<=explorerLegacyTransferLimit?explorerSendUpload(file,id,path,true):explorerSendDirect(file,id,path,true));
+   await (explorerSendDirect(file,id,path,true));
   }
   if(id===project&&(view==='files'||railFileVisible())&&explorer.path===path)await explorerLoad(path);
  }catch(error){alert(error.message||'Не удалось загрузить файл')}
@@ -199,19 +199,12 @@ async function explorerUpload(file){
 }
 
 async function explorerFileBlob(path){
- const item=explorer.items.find(x=>x.path===path);
- if(item&&item.size>explorerLegacyTransferLimit){
-  const link=await explorerApi('downloadLink',{project,path});
-  let response;
-  try{response=await fetch(link.href,{credentials:'omit',cache:'no-store'})}
-  catch{throw Error('Браузер не разрешил просмотр большого файла через Яндекс Диск. Используйте «Скачать».')}
-  if(!response.ok)throw Error('Не удалось прочитать файл с Яндекс Диска');
-  return response.blob();
- }
- const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project,path});
- const r=await fetch(url,{credentials:'same-origin',cache:'no-store'});
- if(!r.ok){let data={};try{data=await r.json()}catch{};throw Error(data.error||'Не удалось получить файл')}
- return r.blob();
+ const link=await explorerApi('downloadLink',{project,path});
+ let response;
+ try{response=await fetch(link.href,{credentials:'omit',cache:'no-store'})}
+ catch{throw Error('Браузер не разрешил просмотр файла через Яндекс Диск. Используйте «Скачать».')}
+ if(!response.ok)throw Error('Не удалось прочитать файл с Яндекс Диска (HTTP '+response.status+')');
+ return response.blob();
 }
 async function explorerDownload(path,name){
  try{
