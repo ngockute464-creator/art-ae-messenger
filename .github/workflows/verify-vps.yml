@@ -108,6 +108,7 @@ jobs:
           bash -n migration/deploy/apply-message-reads.sh
           bash -n migration/deploy/bootstrap-push.sh
           bash -n migration/deploy/apply-message-erasure.sh
+          bash -n migration/deploy/bootstrap-chat-file-deletions.sh
 
 
   verify-unread-postgres:
