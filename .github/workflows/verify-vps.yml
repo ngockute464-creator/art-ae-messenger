@@ -69,3 +69,44 @@ jobs:
           bash -n deploy/artae-release.sh
           bash -n deploy/artae-auto.sh
           bash -n migration/deploy/switch-local.sh
+
+
+  verify-unread-postgres:
+    if: github.ref == 'refs/heads/feature/message-counts-read'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: stage1_test_password
+          POSTGRES_DB: artae
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d artae"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+      - name: Check additive migration and read receipts
+        env:
+          PGPASSWORD: stage1_test_password
+        run: |
+          set -euo pipefail
+          export PGHOST=127.0.0.1 PGPORT=5432 PGUSER=postgres PGDATABASE=artae
+          psql -v ON_ERROR_STOP=1 -c 'CREATE ROLE artae_app LOGIN;'
+          psql -v ON_ERROR_STOP=1 -f migration/sql/001_clean_schema.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/002_office_lease.sql
+          psql -v ON_ERROR_STOP=1 -f migration/tests/unread-fixtures.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/003_message_reads.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/003_message_reads.sql
+          psql -v ON_ERROR_STOP=1 -f migration/tests/unread-verify.sql
