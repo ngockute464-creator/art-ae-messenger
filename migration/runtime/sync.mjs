@@ -7,6 +7,7 @@ import {getSession} from './auth.mjs';
 import {query, transaction} from './postgres.mjs';
 import {messageStats,markMessagesRead} from './unread.mjs';
 import {renameProjectFolder, folderForName} from './project-rename.mjs';
+import {extractChatAttachmentRefs} from './chat-attachment-cleanup.mjs';
 
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(data,status=200)=>Response.json(data,{status,headers});
@@ -293,14 +294,34 @@ export default async function handler(req) {
       const value=action==='edit'?clean(body.text,6000):null;
       if(action==='edit'&&!value)return reply({error:'Сообщение не может быть пустым'},400);
       const isEdit=action==='edit';
-      const {rows:[updated]}=await query(
-        isEdit?
-          'UPDATE public.artae_messages SET body=$4,edited_at=$5 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *':
-          'UPDATE public.artae_messages SET body=\'\',deleted_at=$4 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $5::bigint RETURNING *',
-        isEdit?
-          [body.id,body.convo,session.user.id,value,stamp,revision]:
-          [body.id,body.convo,session.user.id,stamp,revision]
-      );
+      const updated=await transaction(async tx=>{
+        const {rows:[changed]}=await tx(
+          isEdit?
+            'UPDATE public.artae_messages SET body=$4,edited_at=$5 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *':
+            'UPDATE public.artae_messages SET body=\'\',deleted_at=$4 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $5::bigint RETURNING *',
+          isEdit?
+            [body.id,body.convo,session.user.id,value,stamp,revision]:
+            [body.id,body.convo,session.user.id,stamp,revision]
+        );
+        if(!changed||isEdit)return changed;
+        // The original body is erased. Persist file deletion jobs in this SAME
+        // PostgreSQL transaction or roll back the message deletion entirely.
+        const attachments=extractChatAttachmentRefs(m.body);
+        if(attachments.length){
+          const {rows:[convoRecord]}=await tx(
+            'SELECT project_id FROM public.artae_conversations WHERE id=$1',[body.convo]);
+          if(!convoRecord)throw Error('Conversation missing during cleanup');
+          for(const file of attachments){
+            await tx(
+              'INSERT INTO public.artae_chat_file_deletions '+
+              '(message_id,project_id,file_id,file_name,created_at,next_try_at) '+
+              'VALUES($1,$2,$3,$4,$5,$5) ON CONFLICT(message_id,file_id) DO NOTHING',
+              [body.id,convoRecord.project_id,file.fileId,file.fileName,stamp]
+            );
+          }
+        }
+        return changed;
+      });
       if(!updated)return reply({error:'Сообщение уже изменено'},409);
       return reply({message:messageView(updated)});
     }

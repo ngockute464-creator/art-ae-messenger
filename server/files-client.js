@@ -314,7 +314,7 @@ function explorerZoomableImage(media,body,bar){
  apply();
 }
 
-async function explorerPreview(path,name,mime,chatSource=null){
+async function explorerPreview(path,name,mime,chatSource=null,opener=null){
  if(/\.(docx|xlsx)$/i.test(name)){
   if(typeof window.ARTAE_OFFICE_PREVIEW!=='function'){
    alert('Office-просмотр не загрузился. Обновите страницу и попробуйте снова.');
@@ -346,7 +346,16 @@ async function explorerPreview(path,name,mime,chatSource=null){
  dialog.addEventListener('close',dispose,{once:true});
  close.addEventListener('click',()=>dialog.close());
  dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()});
+ // Dialog restores focus to whichever element was active when it opened.
+ // On mobile, restoring the message textarea would reopen the OS keyboard.
+ // Focus the actual media/file button instead, never a hidden input.
+ const active=document.activeElement;
+ if(active?.matches?.('textarea,input,[contenteditable="true"]'))active.blur();
+ if(opener?.isConnected&&typeof opener.focus==='function'){
+  try{opener.focus({preventScroll:true})}catch{opener.focus()}
+ }
  document.body.append(dialog);dialog.showModal();
+ try{close.focus({preventScroll:true})}catch{close.focus()}
  try{
   let signedUrl=null,blob=null;
   if(chatSource){

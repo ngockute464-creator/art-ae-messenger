@@ -11,6 +11,7 @@ import voice from './voice.mjs';
 import voiceTranscript from './voice-transcript.mjs';
 import push from './push.mjs';
 import {startPushWorker,stopPushWorker} from './push-worker.mjs';
+import {startChatAttachmentCleanup,stopChatAttachmentCleanup} from './chat-attachment-cleanup.mjs';
 import {assertLocalDatabase, query, closePool} from './postgres.mjs';
 
 const HOST='127.0.0.1';
@@ -98,7 +99,7 @@ const server=createServer(async(req,res)=>{
 
 try {
   await assertLocalDatabase();
-  server.listen(PORT,HOST,()=>{console.log('ARTAE_NEXT_LISTENING '+HOST+':'+PORT);startPushWorker()});
+  server.listen(PORT,HOST,()=>{console.log('ARTAE_NEXT_LISTENING '+HOST+':'+PORT);startPushWorker();startChatAttachmentCleanup()});
 } catch(error) {
   console.error('ARTAE_NEXT_START_FAILED',error?.message||error);
   process.exitCode=1;
@@ -107,6 +108,7 @@ try {
 server.on('error',err=>{console.error('ARTAE_NEXT_SERVER_ERROR',err.message);process.exitCode=1;});
 async function shutdown(){
   stopPushWorker();
+  stopChatAttachmentCleanup();
   server.close();
   await closePool().catch(()=>{});
 }

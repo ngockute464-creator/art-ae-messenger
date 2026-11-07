@@ -104,7 +104,7 @@ root.addEventListener('click',event=>{
  event.preventDefault();event.stopImmediatePropagation();
  const source=chatMediaSource(button),kind=button.dataset.chatKind;
  if(!['image','video'].includes(kind))return;
- void explorerPreview('',source.name,kind==='image'?'image/*':'video/*',source);
+ void explorerPreview('',source.name,kind==='image'?'image/*':'video/*',source,button);
 },true);
 
 // Copy a private chat attachment, with its exact bytes, to a project folder.
