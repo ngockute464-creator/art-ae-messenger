@@ -25,8 +25,7 @@ function chatMediaHtml(file,message){
   '<span class="chatMediaVisual">'+element+
   '<span class="chatMediaLoading" aria-hidden="true">Загрузка…</span>'+
   (kind==='video'?'<span class="chatMediaPlay" aria-hidden="true">▶</span>':'')+'</span>'+
-  '<span class="chatMediaCaption"><span class="chatMediaCaptionName">'+esc(file.name)+'</span>'+
-  '<span class="chatMediaCaptionSize">'+(file.size/1048576).toFixed(2)+' МБ</span></span></button>';
+  '</button>';
 }
 function chatMediaValidatedUrl(href){
  let url;try{url=new URL(href)}catch{}
