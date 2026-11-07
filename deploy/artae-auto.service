@@ -1,0 +1,11 @@
+[Unit]
+Description=ART-AE safe GitHub CI-gated deployment
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /root/artae-auto.sh deploy
+TimeoutStartSec=240
+StandardOutput=journal
+StandardError=journal
