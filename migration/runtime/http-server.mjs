@@ -11,13 +11,18 @@ import voice from './voice.mjs';
 import voiceTranscript from './voice-transcript.mjs';
 import {assertLocalDatabase, query, closePool} from './postgres.mjs';
 
-const HOST='127.0.0.1', PORT=3101;
-const ORIGIN='http://127.0.0.1:3101';
+const HOST='127.0.0.1';
+const PORT=Number(process.env.ARTAE_API_PORT||3101);
+const ORIGIN=process.env.ARTAE_PUBLIC_ORIGIN||'http://127.0.0.1:3101';
+if(!Number.isSafeInteger(PORT)||PORT<1024||PORT>65535)throw Error('Invalid API port');
+if(!/^https?:\/\/[^/]+$/.test(ORIGIN))throw Error('Invalid configured origin');
 const MAX_BODY=4*1024*1024;
 const PREFIX='/.netlify/functions/';
+const realtimeDisabled=()=>Response.json({enabled:false,error:'Local Realtime not yet enabled'},{status:503,headers:noCache});
 const handlers=new Map([
   ['auth',auth],['sync',sync],['pins',pins],
-  ['files-explorer',filesExplorer],['voice',voice],['voice-transcript',voiceTranscript]
+  ['files-explorer',filesExplorer],['voice',voice],['voice-transcript',voiceTranscript],
+  ['realtime-token',realtimeDisabled]
 ]);
 const noCache={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 
