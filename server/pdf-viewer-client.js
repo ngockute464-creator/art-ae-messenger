@@ -125,7 +125,7 @@ async function explorerPdfDocumentViewer(body,url,dialog){
  // Placeholders occupy the full scrollable height, but at most three sheets
  // contain rasterized canvases. Offscreen canvases are cancelled and released.
  function estimatedSheetHeight(){
-  return Math.max(110,Math.round(Math.max(200,viewport.clientWidth-36)*estimateRatio*zoom)+32);
+  return Math.max(110,Math.round(Math.max(200,viewport.clientWidth-36)*estimateRatio*zoom)+56);
  }
  function releaseScrollCanvas(number){
   const entry=scrollEntries.get(number);
@@ -208,7 +208,7 @@ async function explorerPdfDocumentViewer(body,url,dialog){
    sheetCanvas.height=Math.max(1,Math.floor(vp.height*resolution));
    sheetCanvas.style.width=Math.round(vp.width)+'px';
    sheetCanvas.style.height=Math.round(vp.height)+'px';
-   slot.style.height=Math.round(vp.height+32)+'px';
+   slot.style.height=Math.round(vp.height+56)+'px';
    const ctx=sheetCanvas.getContext('2d',{alpha:false});
    if(!ctx)throw Error('Не удалось создать поверхность PDF');
    entry.task=pdfPage.render({canvas:sheetCanvas,canvasContext:ctx,viewport:vp,
