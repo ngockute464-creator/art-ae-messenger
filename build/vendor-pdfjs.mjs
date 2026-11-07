@@ -6,16 +6,19 @@ const VERSION='6.5.438';
 const OUT='public/vendor/pdfjs';
 const ASSETS=[
  {name:'pdf.mjs',min:350000,max:4000000,expectedSha256:'2792b7c390ad6d5f4245d326b70deebbc990fa4bcac691412f6df886abb9e867'},
- {name:'pdf.worker.mjs',min:600000,max:7000000,expectedSha256:'8336aabf764cb08c818555a2fd2545e4fed10837146de927564875c93b3c4f83'}
+ {name:'pdf.worker.mjs',min:600000,max:7000000,expectedSha256:'8336aabf764cb08c818555a2fd2545e4fed10837146de927564875c93b3c4f83'},
+ {name:'LICENSE',min:8000,max:18000,expectedSha256:null}
 ];
 const providers=[
- name=>'https://cdn.jsdelivr.net/npm/pdfjs-dist@'+VERSION+'/legacy/build/'+name,
- name=>'https://unpkg.com/pdfjs-dist@'+VERSION+'/legacy/build/'+name
+ name=>'https://cdn.jsdelivr.net/npm/pdfjs-dist@'+VERSION+(name==='LICENSE'?'/LICENSE':'/legacy/build/'+name),
+ name=>'https://unpkg.com/pdfjs-dist@'+VERSION+(name==='LICENSE'?'/LICENSE':'/legacy/build/'+name)
 ];
 function verify(bytes,asset){
  if(bytes.length<asset.min||bytes.length>asset.max)return false;
  const text=bytes.toString('utf8');
- if(!text.includes(VERSION)||!text.includes('pdfjsVersion'))return false;
+ if(asset.name==='LICENSE'){
+  if(!text.includes('Apache License')||!text.includes('Version 2.0'))return false;
+ }else if(!text.includes(VERSION)||!text.includes('pdfjsVersion'))return false;
  const sha=createHash('sha256').update(bytes).digest('hex');
  if(asset.expectedSha256&&sha!==asset.expectedSha256)return false;
  console.log('PDFJS_VENDOR_VERIFIED '+asset.name+' version='+VERSION+' sha256='+sha+' bytes='+bytes.length);
