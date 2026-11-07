@@ -1,0 +1,94 @@
+// ART-AE M2 isolated HTTP server for local PostgreSQL.
+// Bind to loopback: never change Caddy, production port 3100, or live services.
+// Explicitly serves only auth and sync while other endpoints are being migrated.
+import {createServer} from 'node:http';
+import {Readable} from 'node:stream';
+import auth from './auth.mjs';
+import sync from './sync.mjs';
+import {assertLocalDatabase, query, closePool} from './postgres.mjs';
+
+const HOST='127.0.0.1', PORT=3101;
+const ORIGIN='http://127.0.0.1:3101';
+const MAX_BODY=4*1024*1024;
+const PREFIX='/.netlify/functions/';
+const handlers=new Map([['auth',auth],['sync',sync]]);
+const noCache={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
+
+function fail(res,status,message) {
+  if(res.headersSent||res.destroyed)return;
+  res.writeHead(status,{'Content-Type':'application/json; charset=utf-8',...noCache});
+  res.end(JSON.stringify({error:message}));
+}
+
+const server=createServer(async(req,res)=>{
+  try {
+    const raw=req.url||'/';
+    if(!raw.startsWith('/')||raw.startsWith('//'))return fail(res,400,'Invalid URL');
+    const url=new URL(raw,ORIGIN);
+    if(url.origin!==ORIGIN)return fail(res,400,'Invalid origin');
+    if(url.pathname==='/healthz'&&req.method==='GET') {
+      await query('SELECT 1');
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8',...noCache});
+      return res.end(JSON.stringify({ok:true}));
+    }
+    if(!url.pathname.startsWith(PREFIX))return fail(res,404,'Not found');
+    const handler=handlers.get(url.pathname.slice(PREFIX.length));
+    if(!handler)return fail(res,404,'Not found');
+    const method=req.method||'GET';
+    const declared=req.headers['content-length'];
+    if(declared!==undefined){
+      const length=Number(declared);
+      if(!Number.isSafeInteger(length)||length<0||length>MAX_BODY)return fail(res,413,'Request too large');
+    }
+    const headers=new Headers();
+    for(const [key,value] of Object.entries(req.headers)){
+      if(value===undefined||['host','connection','transfer-encoding','content-length'].includes(key))continue;
+      headers.set(key,Array.isArray(value)?value.join(', '):value);
+    }
+    let body;
+    if(method!=='GET'&&method!=='HEAD'){
+      let size=0;
+      body=Readable.toWeb(req).pipeThrough(new TransformStream({
+        transform(chunk,controller){
+          size+=chunk.byteLength;
+          if(size>MAX_BODY)throw Error('Request too large');
+          controller.enqueue(chunk);
+        }
+      }));
+    }
+    const request=new Request(url,{method,headers,...(body?{body,duplex:'half'}:{})});
+    const response=await handler(request);
+    if(!(response instanceof Response))throw Error('Invalid API response');
+    const out={};
+    for(const [key,value] of response.headers){
+      if(!['connection','transfer-encoding','content-length','set-cookie'].includes(key))out[key]=value;
+    }
+    const cookies=response.headers.getSetCookie();
+    if(cookies.length)out['Set-Cookie']=cookies;
+    res.writeHead(response.status,out);
+    if(!response.body||method==='HEAD')return res.end();
+    await new Promise((resolve,reject)=>{
+      Readable.fromWeb(response.body).on('error',reject).pipe(res).on('finish',resolve).on('error',reject);
+    });
+  } catch(error) {
+    console.error('ARTAE-NEXT HTTP:',error?.message||error);
+    if(!res.headersSent)fail(res,error?.message==='Request too large'?413:500,'Request failed');
+    else res.destroy();
+  }
+});
+
+try {
+  await assertLocalDatabase();
+  server.listen(PORT,HOST,()=>console.log('ARTAE_NEXT_LISTENING '+HOST+':'+PORT));
+} catch(error) {
+  console.error('ARTAE_NEXT_START_FAILED',error?.message||error);
+  process.exitCode=1;
+  await closePool();
+}
+server.on('error',err=>{console.error('ARTAE_NEXT_SERVER_ERROR',err.message);process.exitCode=1;});
+async function shutdown(){
+  server.close();
+  await closePool().catch(()=>{});
+}
+process.once('SIGTERM',shutdown);
+process.once('SIGINT',shutdown);
