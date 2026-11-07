@@ -40,6 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
+          node migration/tests/check-ui-markup.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
           node --check migration/runtime/unread.mjs
