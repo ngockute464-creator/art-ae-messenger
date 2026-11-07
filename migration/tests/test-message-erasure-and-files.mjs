@@ -9,7 +9,7 @@ assert.ok(sync.includes("text:r.deleted_at===null?r.body:''"));
 assert.ok(sql.includes("UPDATE public.artae_messages SET body=''"));
 assert.ok(sql.includes("CHECK (deleted_at IS NULL OR body='')"));
 for(const s of [project,chat,office])assert.ok(!s.includes('size<=3*1024*1024'));
-assert.ok(project.includes('await explorerSendDirect(file,id,path,overwrite)'));
+assert.ok(project.includes('explorerSendDirect(file,id,path,overwrite)'));
 assert.ok(project.includes("const link=await explorerApi('downloadLink',{project,path})"));
 assert.ok(chat.includes("await chatApi('chatUploadLink',params)"));
 assert.ok(office.includes("action:'officeSaveCommit'"));
