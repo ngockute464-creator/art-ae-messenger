@@ -234,12 +234,12 @@ async function explorerDownload(path,name){
 }
 function explorerKind(name,mime){
  const ext=(name.split('.').pop()||'').toLowerCase(),type=(mime||'').toLowerCase();
- if(['png','jpg','jpeg','gif','webp','bmp','svg','avif'].includes(ext)||type.startsWith('image/'))return 'image';
+ if(['png','jpg','jpeg','gif','webp','bmp','svg','avif','heic','heif'].includes(ext)||type.startsWith('image/'))return 'image';
  if(ext==='pdf'||type==='application/pdf')return 'pdf';
  if(ext==='docx'||type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document')return 'docx';
  if(['txt','md','csv','json','xml','log','js','css','html','yml','yaml','ts'].includes(ext)||type.startsWith('text/'))return 'text';
  if(['mp3','m4a','wav','ogg','oga','aac','flac'].includes(ext)||type.startsWith('audio/'))return 'audio';
- if(['mp4','webm','mov','m4v','ogv'].includes(ext)||type.startsWith('video/'))return 'video';
+ if(['mp4','webm','mov','m4v','ogv','3gp','mkv','avi'].includes(ext)||type.startsWith('video/'))return 'video';
  return 'unknown';
 }
 
