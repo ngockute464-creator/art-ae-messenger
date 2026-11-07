@@ -51,6 +51,9 @@ new Function(merged);
 // Client script is lazy by usage; only tiny bridge is loaded at application start.
 const swFile='public/sw.js';
 let sw=readFileSync(swFile,'utf8');
-sw=sw.replace("'./pwa-client.js'","'./pwa-client.js','./office-client.js'");
+// The PWA packager already lists office-client.js. Duplicate cache entries can
+// reject Cache.addAll and leave the Service Worker uninstalled.
+if(!sw.includes("'./office-client.js'"))
+ sw=sw.replace("'./pwa-client.js'","'./pwa-client.js','./office-client.js'");
 writeFileSync(swFile,sw);
 console.log('ART-AE: bundled pinned VibeOffice /office/ and sandboxed copy-only editing');
