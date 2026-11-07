@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files, feature/mobile-composer-voice-gesture, fix/composer-focus-persistence, feature/chat-media-preview-copy, fix/chat-media-streaming, fix/mobile-media-viewer-layout, fix/mobile-video-byte-ranges, fix/viewer-focus-chat-attachment-deletion, fix/media-copy-single-done]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation, feature/message-erasure-unlimited-files, feature/mobile-composer-voice-gesture, fix/composer-focus-persistence, feature/chat-media-preview-copy, fix/chat-media-streaming, fix/mobile-media-viewer-layout, fix/mobile-video-byte-ranges, fix/viewer-focus-chat-attachment-deletion, fix/media-copy-single-done, feature/project-files-unified-preview]
   workflow_dispatch:
 
 permissions:
@@ -65,6 +65,11 @@ jobs:
           node migration/tests/test-composer-focus.mjs
           node migration/tests/test-chat-media.mjs
           node migration/tests/test-project-video-and-copy-done.mjs
+          node migration/tests/test-unified-files-preview.mjs
+          test -s public/vendor/pdfjs/pdf.mjs
+          test -s public/vendor/pdfjs/pdf.worker.mjs
+          node --check public/vendor/pdfjs/pdf.mjs
+          node --check public/vendor/pdfjs/pdf.worker.mjs
           node migration/tests/test-mobile-video-range.mjs
           node migration/tests/test-mobile-media-viewer.mjs
           node migration/tests/test-chat-attachment-cleanup.mjs

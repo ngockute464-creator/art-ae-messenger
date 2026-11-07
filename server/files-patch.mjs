@@ -329,4 +329,46 @@ css+='\n'+String.raw`
 /* After a completed/accepted copy there is one visible Done button. */
 .chatMediaPickerFooter>[hidden]{display:none!important}
 `;
+css+='\n'+String.raw`
+/* Compact chat media, with filenames retained only in the viewer/ARIA. */
+.chatMediaThumb .chatMediaCaption{display:none}
+/* Project file type icons: quiet, scalable, consistent between Android/desktop. */
+.projectFileTypeIcon{display:inline-flex;flex:0 0 24px;align-items:center;
+ justify-content:center;width:24px;height:24px;color:#64758b}
+.projectFileTypeIcon svg{display:block;width:23px;height:23px;max-width:100%}
+.projectFileTypeIcon-word{color:#537ab2}
+.projectFileTypeIcon-excel{color:#328463}
+.projectFileTypeIcon-pdf{color:#b95055}
+.projectFileTypeIcon-slides{color:#aa7445}
+.projectFileTypeIcon-video,.projectFileTypeIcon-image{color:#60789b}
+.projectFileTypeIcon-markdown{color:#6b7595}
+.fileEntryNameAction{min-width:0;overflow-wrap:anywhere}
+.fileViewerDownload{white-space:nowrap}
+/* Lightweight, local PDF.js view. Only one canvas is mounted at a time. */
+.artaePdfToolbar{display:flex;align-items:center;flex-wrap:wrap;gap:7px;
+ padding:8px;border-bottom:1px solid #dde3e9}
+.artaePdfToolbar button{min-height:34px}
+.artaePdfPageNumber{width:58px;min-width:0;height:34px;box-sizing:border-box;
+ border:1px solid #cbd5e1;border-radius:7px;padding:3px 6px;
+ background:var(--surface,#fff);color:inherit;font:inherit;text-align:center}
+.artaePdfCount,.artaePdfZoom{font-size:13px;opacity:.75;white-space:nowrap}
+.artaePdfSearch{flex:1 1 100px;min-width:100px;max-width:230px;height:34px;
+ box-sizing:border-box;padding:5px 8px;border:1px solid #cbd5e1;
+ background:var(--surface,#fff);color:inherit;border-radius:7px;font:inherit}
+.artaePdfStatus{min-height:18px;padding:6px 10px;color:#617087;font-size:12px}
+.artaePdfViewport{height:min(65vh,700px);height:min(65dvh,700px);
+ min-height:200px;max-width:100%;overflow:auto;background:#e8ebf0;
+ padding:12px;box-sizing:border-box;text-align:center;border-radius:7px}
+.artaePdfCanvas{display:block;max-width:none;margin:0 auto;
+ background:#fff;box-shadow:0 2px 14px #0002}
+@media(max-width:650px){
+ .artaePdfToolbar{gap:5px;padding:7px 3px}
+ .artaePdfToolbar button{min-height:36px;padding:5px 9px}
+ .artaePdfSearch{flex:1 1 125px;min-width:100px;max-width:100%}
+ .artaePdfViewport{height:58dvh;min-height:180px;padding:7px}
+ .fileViewerDownload{margin-left:0}
+ .projectFileTypeIcon{flex-basis:21px;width:21px}
+ .projectFileTypeIcon svg{width:20px;height:20px}
+}
+`;
 writeFileSync(cssFile,css);
