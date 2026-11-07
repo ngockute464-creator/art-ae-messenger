@@ -62,6 +62,7 @@ jobs:
           node migration/tests/check-ui-markup.mjs
           node migration/tests/test-mobile-composer-voice.mjs
           node migration/tests/test-mobile-composer-interactions.mjs
+          node --test tests/e12-composer.test.mjs tests/e9-voice.test.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
           node --check migration/runtime/unread.mjs
