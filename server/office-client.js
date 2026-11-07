@@ -83,10 +83,23 @@ window.ARTAE_OFFICE_PREWARM_XLSX=prewarmOfficeXlsx;
 // Expose only the optional warm-up function to the file browser.
 window.ARTAE_OFFICE_PREWARM=prewarmOfficeDocx;
 
+// The Office engine exports DOCX/XLSX previews as a PDF Blob. Render it in
+// our PDF.js component, not a native <object> that Android hands to another app.
+function disposeOfficePdf(ctx){
+ if(ctx?.pdfHost){
+  // The same close event that the regular PDF dialog uses: cancel pending
+  // pages, release canvases and destroy PDF.js' document loading task.
+  ctx.pdfHost.dispatchEvent(new Event('close'));
+  ctx.pdfHost.remove();
+  ctx.pdfHost=null;
+ }
+ if(ctx?.pdfUrl){URL.revokeObjectURL(ctx.pdfUrl);ctx.pdfUrl=null}
+}
+
 function close(){
  const a=active;if(!a)return;active=null;releaseOfficeLease(a);
  window.removeEventListener('message',a.message);
- if(a.pdfUrl){URL.revokeObjectURL(a.pdfUrl);a.pdfUrl=null}
+ disposeOfficePdf(a);
  a.overlay.remove();
  if(a.kind==='ledger')setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},800);
 }
@@ -94,9 +107,9 @@ function finishDocxClose(ctx){
  if(active!==ctx)return;
  active=null;releaseOfficeLease(ctx);
  window.removeEventListener('message',ctx.message);
- if(ctx.pdfUrl){URL.revokeObjectURL(ctx.pdfUrl);ctx.pdfUrl=null}
+ disposeOfficePdf(ctx);
  const host=ctx.overlay;
- host.querySelectorAll('.artaePdfViewer,.artaePdfFallback,.artaePdfActions').forEach(el=>el.remove());
+ host.querySelectorAll('.artaeOfficePdfHost').forEach(el=>el.remove());
  ctx.frame.style.display='';
  // The iframe never leaves its DOM parent; closing Quire resets to a fresh
  // blank document before we hide it. Keep the ready engine for the next DOCX.
@@ -179,7 +192,7 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
   overlay.append(box);
  }
  const started=performance.now();
- const ctx={overlay,frame,kind,mode,pdfUrl:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false,savePreparing:false,editToken:acquired?.editToken||null,path,leaseTimer:null,renewing:false,leaseFailed:false,released:false};active=ctx;
+ const ctx={overlay,frame,kind,mode,pdfUrl:null,pdfHost:null,message:null,buffer:null,name,projectId,ready:!!warm?.ready,sent:false,started,sentAt:0,readyAt:warm?.ready?started:0,fileAt:0,prewarmed:!!warm?.ready,warmInfo,warmAge,closing:false,closeTimer:null,version:null,saving:false,savePreparing:false,editToken:acquired?.editToken||null,path,leaseTimer:null,renewing:false,leaseFailed:false,released:false};active=ctx;
  startOfficeLeaseHeartbeat(ctx,state,saveButton);
  const send=()=>{if(!ctx.ready||!ctx.buffer||ctx.sent)return;ctx.sent=true;ctx.sentAt=performance.now();frame.contentWindow.postMessage({type:'artae-office-open',name,buffer:ctx.buffer,remoteSave:mode==='edit'&&!localFile},location.origin,[ctx.buffer]);ctx.buffer=null;state.textContent='Открываем документ… (подготовка '+Math.round(ctx.sentAt-ctx.started)+' мс)'};
  ctx.message=event=>{
@@ -238,22 +251,40 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
    send();
   }else if(msg.type==='artae-office-opened'){const now=performance.now(),editorStart=Math.round(ctx.readyAt-ctx.started),fileReady=Math.round(ctx.fileAt-ctx.started),processing=Math.round(now-ctx.sentAt),total=Math.round(now-ctx.started),waiting=Math.round(ctx.sentAt-Math.max(ctx.readyAt,ctx.fileAt));state.textContent='Готово · всего '+(total/1000).toFixed(1)+' с · запуск '+(editorStart/1000).toFixed(1)+' с · файл '+(fileReady/1000).toFixed(1)+' с · обработка '+(processing/1000).toFixed(1)+' с · прогрев: '+ctx.warmInfo+(ctx.warmAge?' ('+(ctx.warmAge/1000).toFixed(1)+' с)':'');if(ctx.mode==='preview'){state.textContent='Создаём PDF…';frame.contentWindow.postMessage({type:'artae-office-export-pdf'},location.origin)}console.info('[ART-AE Office] '+name,{source:localFile?'local':'project',prewarmed:ctx.prewarmed,editorStartMs:editorStart,fileReadyMs:fileReady,waitingMs:waiting,processingMs:processing,totalMs:total});}
   else if(msg.type==='artae-office-pdf'&&ctx.mode==='preview'){
-   if(!(msg.blob instanceof Blob)||msg.blob.type!=='application/pdf'||msg.blob.size===0){state.textContent='Ошибка: редактор не вернул PDF';return;}
+   if(ctx.pdfHost)return; // Ignore repeated export messages.
+   if(!(msg.blob instanceof Blob)||msg.blob.type!=='application/pdf'||msg.blob.size===0){
+    state.textContent='Ошибка: редактор не вернул PDF';return;
+   }
+   const renderPdf=window.ARTAE_PDF_RENDER;
+   if(typeof renderPdf!=='function'){
+    state.textContent='PDF-просмотрщик недоступен. Обновите АРТ-АЕ.';
+    return;
+   }
    ctx.pdfUrl=URL.createObjectURL(msg.blob);
    frame.style.display='none';
-   // A browser PDF viewer is not an HTML editor. A sandboxed iframe can
-   // prevent the browser's built-in PDF renderer from starting.
-   const viewer=document.createElement('object');viewer.className='artaePdfViewer';
-   viewer.type='application/pdf';viewer.data=ctx.pdfUrl;viewer.title='PDF — '+name;
-   const fallback=document.createElement('div');fallback.className='artaePdfUnavailable';
-   fallback.textContent='Встроенный просмотр PDF недоступен в этом браузере.';
-   const fallbackOpen=document.createElement('a');fallbackOpen.href=ctx.pdfUrl;fallbackOpen.target='_blank';fallbackOpen.rel='noopener';fallbackOpen.textContent='Открыть PDF';
-   fallback.append(' ',fallbackOpen);viewer.append(fallback);
-   const links=document.createElement('div');links.className='artaePdfActions';
-   const link=document.createElement('a');link.className='artaePdfFallback';link.href=ctx.pdfUrl;link.target='_blank';link.rel='noopener';link.textContent='Открыть PDF в новой вкладке';
-   const download=document.createElement('a');download.className='artaePdfFallback';download.href=ctx.pdfUrl;download.download=name.replace(/\.(docx|xlsx)$/i,'.pdf');download.textContent='Скачать PDF';
-   links.append(link,download);
-   frame.parentElement.append(viewer,links);state.textContent='PDF готов · встроенный просмотр или открытие в новой вкладке';
+   const host=document.createElement('section');
+   host.className='artaeOfficePdfHost';
+   host.setAttribute('role','region');
+   host.setAttribute('aria-label','Просмотр '+name);
+   const actions=document.createElement('div');
+   actions.className='artaeOfficePdfActions';
+   const download=document.createElement('a');
+   download.className='btn small artaeOfficePdfDownload';
+   download.href=ctx.pdfUrl;download.download=name.replace(/\.(docx|xlsx)$/i,'.pdf');
+   download.textContent='↓ Скачать PDF';
+   actions.append(download);
+   host.append(actions);
+   ctx.pdfHost=host;
+   frame.parentElement.append(host);
+   state.textContent='Открываем PDF в АРТ-АЕ…';
+   try{closeButton.focus({preventScroll:true})}catch{closeButton.focus()}
+   void Promise.resolve().then(()=>renderPdf(host,ctx.pdfUrl,host)).then(()=>{
+    if(active===ctx&&ctx.pdfHost===host)state.textContent='PDF открыт в АРТ-АЕ';
+   }).catch(error=>{
+    if(active===ctx&&ctx.pdfHost===host){
+     state.textContent='Не удалось открыть PDF: '+String(error?.message||error);
+    }
+   });
   }
   else if(msg.type==='artae-office-close-result'){
    clearTimeout(ctx.closeTimer);ctx.closeTimer=null;ctx.closing=false;closeButton.disabled=false;
@@ -307,8 +338,13 @@ document.addEventListener('click',event=>{
   .catch(error=>alert('Не удалось открыть редактор: '+String(error?.message||error)));
 },true);
 const css=document.createElement('style');css.textContent=`
-.artaePdfViewer{flex:1;width:100%;height:100%;border:0;min-height:0}
-.artaePdfActions{display:flex;gap:12px;flex-wrap:wrap;padding:6px 12px}.artaePdfFallback{font:13px sans-serif}.artaePdfUnavailable{padding:20px;font:14px sans-serif}
+.artaeOfficePdfHost{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;width:100%;overflow:hidden;padding:8px;box-sizing:border-box}
+.artaeOfficePdfActions{display:flex;justify-content:flex-end;gap:10px;flex:0 0 auto;padding:4px 7px 8px}
+.artaeOfficePdfDownload{white-space:nowrap}
+.artaeOfficePdfHost .artaePdfToolbar{flex:0 0 auto}
+.artaeOfficePdfHost .artaePdfViewport{flex:1 1 auto;height:auto;max-height:none;min-height:180px;overscroll-behavior:contain}
+.artaeOfficePdfHost .artaePdfStatus{flex:0 0 auto}
+@media(max-width:650px){.artaeOfficePdfHost{padding:5px}.artaeOfficePdfActions{padding:3px 5px 6px}}
 .artaeOfficeWarmHost{position:fixed;left:0;top:0;width:min(1100px,100vw);height:80vh;opacity:0;pointer-events:none;z-index:-1;overflow:hidden}
 .artaeOfficeWarmHost iframe{width:100%;height:100%;border:0}
 .artaeOfficeWarmHost.artaeOfficeWarmActive{inset:0;width:100%;height:100dvh;opacity:1;pointer-events:auto;z-index:100001;display:flex;flex-direction:column;background:var(--surface,#fff)}
