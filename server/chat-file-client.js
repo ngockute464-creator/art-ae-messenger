@@ -47,7 +47,12 @@ async function chatUploadEntry(entry,context){
  if(url.protocol!=='https:'||!/(^|\.)(yandex\.(ru|net)|yandexcloud\.net)$/.test(url.hostname))throw Error('Недопустимая ссылка Яндекс Диска');
  let res;
  try{res=await fetch(url.href,{method:link.method==='POST'?'POST':'PUT',body:entry.file,credentials:'omit'})}
- catch{throw Error('Браузер заблокировал прямую загрузку файла (CORS)')}
+ catch{
+  if(entry.file.size>3*1024*1024)
+   throw Error('Браузер заблокировал прямую загрузку файла (CORS)');
+  await chatApi('chatUpload',params,entry.file);
+  entry.uploaded=true;return;
+ }
  if(!res.ok)throw Error('Яндекс Диск отклонил загрузку (HTTP '+res.status+')');
  entry.uploaded=true;
 }

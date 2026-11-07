@@ -202,16 +202,28 @@ async function openProjectDocument(path,name,projectId,localFile=null,mode='edit
      });
      let signed={};try{signed=await auth.json()}catch{}
      if(!auth.ok)throw Error(signed.error||'Не удалось подтвердить версию документа');
-     let uploaded;
+     let uploaded,proxyResult=null;
      try{uploaded=await fetch(signed.href,{method:signed.method||'PUT',body:msg.blob,credentials:'omit'})}
-     catch{throw Error('Браузер заблокировал запись документа в Яндекс Диск (CORS). Изменения остались в редакторе. Скачайте копию через меню «Файл».')}
-     if(!uploaded.ok)throw Error('Яндекс Диск не принял документ (HTTP '+uploaded.status+')');
-     const commit=await fetch('/.netlify/functions/files-explorer',{
-      method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action:'officeSaveCommit',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
-     });
-     let result={};try{result=await commit.json()}catch{}
-     if(!commit.ok)throw Error(result.error||'Не удалось завершить сохранение документа');
+     catch{
+      if(msg.blob.size>3*1024*1024)
+       throw Error('Браузер заблокировал запись документа в Яндекс Диск (CORS). Изменения остались в редакторе. Скачайте копию через меню «Файл».');
+      const q=new URLSearchParams({action:'officeSave',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken});
+      const fallback=await fetch('/.netlify/functions/files-explorer?'+q,{
+       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/octet-stream'},body:msg.blob
+      });
+      proxyResult=await fallback.json().catch(()=>({}));
+      if(!fallback.ok)throw Error(proxyResult.error||'Не удалось сохранить документ');
+     }
+     let result=proxyResult;
+     if(!result){
+      if(!uploaded.ok)throw Error('Яндекс Диск не принял документ (HTTP '+uploaded.status+')');
+      const commit=await fetch('/.netlify/functions/files-explorer',{
+       method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({action:'officeSaveCommit',project:projectId,path,expectedModified:ctx.version,editToken:ctx.editToken})
+      });
+      result=await commit.json().catch(()=>({}));
+      if(!commit.ok)throw Error(result.error||'Не удалось завершить сохранение документа');
+     }
      if(typeof result.modified!=='string'||!result.modified)throw Error('Сервер не подтвердил новую версию документа');
      ctx.version=result.modified;ok=true;state.textContent='Сохранено на Яндекс Диске';
      if(typeof explorerLoad==='function'&&projectId===project&&explorer?.path===path.split('/').slice(0,-1).join('/'))void explorerLoad(explorer.path);

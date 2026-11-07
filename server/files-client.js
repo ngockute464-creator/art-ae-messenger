@@ -4,7 +4,17 @@ let explorerRequest=0;
 let explorerUploading=null;
 let explorerDeleting=false;
 let explorerPolling=false;
-// Direct transfer for all file sizes; proxy remains a safety-bound legacy route.
+// There is no user file-size cap. The legacy 3 MiB proxy is a fallback only
+// when a browser cannot use the direct Yandex Disk transfer link.
+const explorerLegacyProxyBytes=3*1024*1024;
+async function explorerTransferAnySize(file,id,path,overwrite){
+ try{return await explorerSendDirect(file,id,path,overwrite)}
+ catch(error){
+  if(file.size>explorerLegacyProxyBytes||error.status===409)throw error;
+  console.warn('ART-AE file direct transfer unavailable; using small-file proxy');
+  return explorerSendUpload(file,id,path,overwrite);
+ }
+}
 async function explorerApi(action,params){
  const api='/.netlify/functions/files-explorer';
  const options={credentials:'same-origin',cache:'no-store'};
@@ -185,13 +195,13 @@ async function explorerUpload(file){
  if(view==='files'||railFileVisible())render();
  explorerUploadUpdate();
  try{
-  try{await (explorerSendDirect(file,id,path,overwrite))}
+  try{await explorerTransferAnySize(file,id,path,overwrite)}
   catch(error){
    if(error.status!==409||overwrite)throw error;
    if(!confirm('Файл «'+file.name+'» уже существует. Заменить его?'))return;
    overwrite=true;
    if(explorerUploading){explorerUploading.percent=0;explorerUploading.processing=false;explorerUploadUpdate()}
-   await (explorerSendDirect(file,id,path,true));
+   await explorerTransferAnySize(file,id,path,true);
   }
   if(id===project&&(view==='files'||railFileVisible())&&explorer.path===path)await explorerLoad(path);
  }catch(error){alert(error.message||'Не удалось загрузить файл')}
@@ -200,11 +210,19 @@ async function explorerUpload(file){
 
 async function explorerFileBlob(path){
  const link=await explorerApi('downloadLink',{project,path});
- let response;
- try{response=await fetch(link.href,{credentials:'omit',cache:'no-store'})}
- catch{throw Error('Браузер не разрешил просмотр файла через Яндекс Диск. Используйте «Скачать».')}
- if(!response.ok)throw Error('Не удалось прочитать файл с Яндекс Диска (HTTP '+response.status+')');
- return response.blob();
+ try{
+  const response=await fetch(link.href,{credentials:'omit',cache:'no-store'});
+  if(!response.ok)throw Error('Не удалось прочитать файл с Яндекс Диска (HTTP '+response.status+')');
+  return response.blob();
+ }catch(error){
+  const item=explorer.items.find(x=>x.path===path);
+  if(!item||item.size>explorerLegacyProxyBytes)
+   throw Error('Браузер не разрешил просмотр файла через Яндекс Диск. Используйте «Скачать».');
+  const url='/.netlify/functions/files-explorer?'+new URLSearchParams({action:'download',project,path});
+  const response=await fetch(url,{credentials:'same-origin',cache:'no-store'});
+  if(!response.ok)throw Error('Не удалось прочитать файл (HTTP '+response.status+')');
+  return response.blob();
+ }
 }
 async function explorerDownload(path,name){
  try{
