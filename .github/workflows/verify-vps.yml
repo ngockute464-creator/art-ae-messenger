@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push, fix/push-controls, fix/service-worker-activation]
   workflow_dispatch:
 
 permissions:
@@ -56,6 +56,7 @@ jobs:
           grep -q "ARTAE_PUSH_OPEN" public/sw.js
           grep -q "artae_push_deliveries" migration/runtime/sync.mjs
           node migration/tests/test-pwa-update.mjs
+          node migration/tests/test-sw-install.mjs
           node migration/tests/test-pwa-runtime.mjs
           node migration/tests/check-ui-markup.mjs
           node --check server/unread-client.js
