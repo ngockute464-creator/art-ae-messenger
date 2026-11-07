@@ -9,7 +9,7 @@ assert.ok(chat.includes("source,button)"));
 assert.ok(patch.includes("explorerPreview(el.dataset.path,el.dataset.name,el.dataset.mime,null,el)"));
 assert.ok(app.includes('filePreviewDialog'));
 const start=code.indexOf(' // Dialog restores focus to whichever element was active');
-const end=code.indexOf('\n try{\n   let signedUrl',start);
+const end=code.indexOf('\n try{\n  let signedUrl',start);
 assert.ok(start>0&&end>start,'Viewer must explicitly manage focus before asynchronous loading');
 const snippet=code.slice(start,end);
 const events=[],opener={isConnected:true,focus(){events.push('openerFocus')}};
