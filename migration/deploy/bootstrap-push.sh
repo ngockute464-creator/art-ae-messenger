@@ -2,6 +2,7 @@
 # ART-AE one-time, pinned, reversible infrastructure preparation. Does NOT deploy.
 set -Eeuo pipefail
 umask 077
+trap 'code=$?; printf "[push] ERROR at line %s (exit %s)\n" "$LINENO" "$code" >&2' ERR
 [[ $(id -u) -eq 0 ]] || { echo 'Run as root' >&2; exit 1; }
 EXPECTED_SHA="$1"
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Provide pinned SHA' >&2; exit 1; }
@@ -43,7 +44,9 @@ fs.chownSync(tmp,stat.uid,stat.gid);
 fs.renameSync(tmp,path);
 console.log('[push] VAPID generated (secret not displayed)');
 NODE
-runuser -u artae_app -- test -r /etc/artae/artae.env || exit 1
+# systemd reads the root-owned EnvironmentFile and passes VAPID values to the
+# service. The artae_app Unix account must NOT read the secret file directly.
+[[ -s /etc/artae/artae.env ]] || { echo '[push] Environment file missing' >&2; exit 1; }
 echo '[push] Backing up PostgreSQL'
 install -d -m 700 /var/backups/artae
 BACKUP="/var/backups/artae/pre-push-$(date -u +%Y%m%dT%H%M%SZ).dump"
