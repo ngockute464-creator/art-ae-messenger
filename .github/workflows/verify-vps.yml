@@ -69,6 +69,7 @@ jobs:
           bash -n deploy/artae-release.sh
           bash -n deploy/artae-auto.sh
           bash -n migration/deploy/switch-local.sh
+          bash -n migration/deploy/apply-message-reads.sh
 
 
   verify-unread-postgres:
