@@ -59,6 +59,10 @@ runuser -u postgres -- pg_dump -Fc -d artae > "$BACKUP"
 runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -d artae < "$STAGE/repo/migration/sql/004_web_push.sql"
 runuser -u artae_app -- psql -X -v ON_ERROR_STOP=1 -d artae -At -c \
  'SELECT count(*) FROM public.artae_push_subscriptions' >/dev/null
+# Node 24 looks for package.json in the current working directory. When the
+# root operator launches this script from /root, the restricted account cannot
+# traverse /root. Validate from the application's readable installation root.
+cd /opt/artae-next
 runuser -u artae_app -- /usr/local/bin/node -e \
  "require('/opt/artae-next/push-deps/node_modules/web-push');import('/opt/artae-next/runtime/postgres.mjs').then(async m=>{await m.assertLocalDatabase();await m.closePool()})"
 echo '[push] Checking egress to browser push networks'
