@@ -2,7 +2,7 @@ name: Verify ART-AE VPS release
 
 on:
   push:
-    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate]
+    branches: [netlify-preview, migration/local-postgres, feature/message-counts-read, feature/pwa-safe-autoupdate, feature/web-push]
   workflow_dispatch:
 
 permissions:

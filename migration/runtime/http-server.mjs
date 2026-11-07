@@ -9,6 +9,8 @@ import pins from './pins.mjs';
 import filesExplorer from './files-explorer.mjs';
 import voice from './voice.mjs';
 import voiceTranscript from './voice-transcript.mjs';
+import push from './push.mjs';
+import {startPushWorker,stopPushWorker} from './push-worker.mjs';
 import {assertLocalDatabase, query, closePool} from './postgres.mjs';
 
 const HOST='127.0.0.1';
@@ -22,7 +24,7 @@ const realtimeDisabled=()=>Response.json({enabled:false,error:'Local Realtime no
 const handlers=new Map([
   ['auth',auth],['sync',sync],['pins',pins],
   ['files-explorer',filesExplorer],['voice',voice],['voice-transcript',voiceTranscript],
-  ['realtime-token',realtimeDisabled]
+  ['realtime-token',realtimeDisabled],['push',push]
 ]);
 const noCache={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 
@@ -91,7 +93,7 @@ const server=createServer(async(req,res)=>{
 
 try {
   await assertLocalDatabase();
-  server.listen(PORT,HOST,()=>console.log('ARTAE_NEXT_LISTENING '+HOST+':'+PORT));
+  server.listen(PORT,HOST,()=>{console.log('ARTAE_NEXT_LISTENING '+HOST+':'+PORT);startPushWorker()});
 } catch(error) {
   console.error('ARTAE_NEXT_START_FAILED',error?.message||error);
   process.exitCode=1;
@@ -99,6 +101,7 @@ try {
 }
 server.on('error',err=>{console.error('ARTAE_NEXT_SERVER_ERROR',err.message);process.exitCode=1;});
 async function shutdown(){
+  stopPushWorker();
   server.close();
   await closePool().catch(()=>{});
 }

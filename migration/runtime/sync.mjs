@@ -250,11 +250,28 @@ export default async function handler(req) {
       const text=clean(body.text,6000);
       if(!text)return reply({error:'Введите сообщение'},400);
       const id=uuid(body.requestId)?body.requestId:randomUUID();
-      const {rows:[inserted]}=await query(
-        'INSERT INTO public.artae_messages(id,conversation_id,author_id,author_name,body,created_at) '+
-        'VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING RETURNING *',
-        [id,body.convo,session.user.id,session.user.name,text,now()]
-      );
+      const {inserted}=await transaction(async tx=>{
+        const stamp=now();
+        const {rows:[inserted]}=await tx(
+          'INSERT INTO public.artae_messages(id,conversation_id,author_id,author_name,body,created_at) '+
+          'VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(id) DO NOTHING RETURNING *',
+          [id,body.convo,session.user.id,session.user.name,text,stamp]
+        );
+        if(inserted){
+          await tx(
+            'INSERT INTO public.artae_push_deliveries '+
+            '(message_id,subscription_id,recipient_user_id,created_at,next_try_at) '+
+            'SELECT $1,s.id,s.user_id,$2,$2 '+
+            'FROM public.artae_push_subscriptions s '+
+            'JOIN public.artae_users u ON u.id=s.user_id '+
+            'JOIN public.artae_sessions x ON x.sid=s.session_sid '+
+            'WHERE s.user_id<>$3 AND u.disabled=false AND u.generation=x.generation '+
+            'AND x.last_seen>$4 ON CONFLICT(message_id,subscription_id) DO NOTHING',
+            [id,stamp,session.user.id,stamp-180*86400000]
+          );
+        }
+        return {inserted};
+      });
       if(inserted)return reply({message:messageView(inserted)});
       const old=await one('message',id);
       if(!old||old.author_id!==session.user.id||old.body!==text||old.conversation_id!==body.convo)

@@ -32,10 +32,21 @@ export default async function handler(req){
  try{
   const session=await getSession(req);
   if(!session)return reply({error:'Требуется вход'},401);
-  const action=req.method==='GET'?new URL(req.url).searchParams.get('action'):null;
+  const url=new URL(req.url);
+  const action=req.method==='GET'?url.searchParams.get('action'):null;
   if(req.method==='GET'){
-   if(action!=='config')return reply({error:'Unknown action'},404);
-   return reply({enabled:hasVapid(),publicKey:hasVapid()?process.env.ARTAE_VAPID_PUBLIC_KEY:null});
+   if(action==='config')
+    return reply({enabled:hasVapid(),publicKey:hasVapid()?process.env.ARTAE_VAPID_PUBLIC_KEY:null});
+   if(action==='status'){
+    const endpoint=url.searchParams.get('endpoint');
+    if(typeof endpoint!=='string'||endpoint.length>2048||endpoint.length<30)
+     return reply({subscribed:false});
+    const {rows}=await query('SELECT 1 FROM public.artae_push_subscriptions '+
+     'WHERE endpoint_hash=$1 AND user_id=$2 AND session_sid=$3',
+     [digest(endpoint),session.user.id,session.sid]);
+    return reply({subscribed:rows.length>0});
+   }
+   return reply({error:'Unknown action'},404);
   }
   const body=await req.json().catch(()=>null);
   if(!body||typeof body!=='object'||Array.isArray(body))return reply({error:'Bad request'},400);
