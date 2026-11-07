@@ -118,6 +118,7 @@ if(process.env.ARTAE_OFFICE_ORIGIN)
 else
  await import('../server/office-patch.mjs');
 await import('../server/unread-patch.mjs');
+await import('../server/pwa-safety-patch.mjs');
 // Reject stale or invalid generated client before publishing.
 const finalClient=readFileSync('public/app.js','utf8');
 new Function(finalClient);
