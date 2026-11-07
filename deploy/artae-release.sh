@@ -19,7 +19,7 @@ fail(){ log "ERROR: $*" >&2; exit 1; }
 [[ "$ACTION" =~ ^(stage|promote|rollback|status)$ ]] || fail 'Usage: artae-release.sh {stage|promote|rollback|status} [release-id]'
 [[ -x "$NODE" && -d "$NEXT/node_modules/pg" ]] || fail 'Local Node/PostgreSQL dependencies missing'
 mkdir -p "$RELEASES" "$RUNTIMES"
-chmod 755 "$RELEASES"
+chmod 755 "$RELEASES" "$RUNTIMES"
 exec 9>/run/lock/artae-deploy.lock
 flock -n 9 || fail 'Another deployment is running'
 
