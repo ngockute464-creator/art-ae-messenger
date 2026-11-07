@@ -89,7 +89,7 @@ function transferUrl(href){
 async function transferFetch(href,options={}){
  let current=transferUrl(href);
  for(let hop=0;hop<6;hop++){
-  const r=await fetch(current,{...options,redirect:'manual',signal:AbortSignal.timeout(25000)});
+  const r=await fetch(current,{...options,redirect:'manual',signal:options.signal??AbortSignal.timeout(25000)});
   if([301,302,303,307,308].includes(r.status)){
    const location=r.headers.get('location');
    if(!location)throw Object.assign(Error('Ссылка скачивания недействительна'),{status:502});
@@ -213,6 +213,20 @@ async function chatFolder(root){
  try{await disk('PUT','/resources',{path})}catch(e){if(e.status!==409)throw e}
  return path;
 }
+// Browser-safe media types are explicit: never serve arbitrary user content as
+// HTML, scripts or an executable type from the application's authenticated origin.
+const CHAT_MEDIA_MIMES=Object.freeze({
+ png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',
+ gif:'image/gif',webp:'image/webp',bmp:'image/bmp',avif:'image/avif',
+ heic:'image/heic',heif:'image/heif',
+ mp4:'video/mp4',m4v:'video/mp4',webm:'video/webm',
+ mov:'video/quicktime',ogv:'video/ogg', '3gp':'video/3gpp',
+ mkv:'video/x-matroska',avi:'video/x-msvideo'
+});
+function chatMediaMime(name){
+ const ext=name.slice(name.lastIndexOf('.')+1).toLowerCase();
+ return CHAT_MEDIA_MIMES[ext]||null;
+}
 function chatObjectName(id,name){
  if(!chatFileToken(id))throw Object.assign(Error('Недопустимый идентификатор файла'),{status:400});
  return id+'__'+fileName(name);
@@ -229,7 +243,7 @@ export default async function handler(request){
   }else if(request.method==='POST'){
    if(!request.headers.get('content-type')?.startsWith('application/json'))return response({error:'Недопустимый формат запроса'},415);
    try{args=await request.json()}catch{return response({error:'Неправильный JSON'},400)}
-  }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',convo:url.searchParams.get('convo'),fileId:url.searchParams.get('fileId'),name:url.searchParams.get('name')};
+  }else args={action:url.searchParams.get('action'),project:url.searchParams.get('project'),path:url.searchParams.get('path')||'',convo:url.searchParams.get('convo'),fileId:url.searchParams.get('fileId'),name:url.searchParams.get('name'),messageId:url.searchParams.get('messageId')};
   // Migration safety: never allow changes to the existing shared Yandex Disk
   // until the operator deliberately enables writes for the next app.
   if(process.env.ARTAE_NEXT_ALLOW_DISK_WRITES!=='1' && [
@@ -238,7 +252,7 @@ export default async function handler(request){
   ].includes(args.action))return response({error:'Запись на Яндекс Диск для новой системы пока отключена'},503);
   const p=await project(args.project);
   const rel=relative(args.path||'');
-  if(['chatUpload','chatUploadLink','chatDownloadLink','chatCopyToProject'].includes(args.action)){
+  if(['chatUpload','chatUploadLink','chatDownloadLink','chatCopyToProject','chatMedia'].includes(args.action)){
    await chatConvoProject(args.convo,p.id);
    const name=fileName(args.name),object=chatObjectName(args.fileId,name);
    const path=p.folder_path+'/'+CHAT_FILES+'/'+object;
@@ -261,6 +275,49 @@ export default async function handler(request){
     if(metadata.type!=='file')throw Object.assign(Error('Вложение не найдено'),{status:404});
     const link=await disk('GET','/resources/download',{path});
     return response({href:transferUrl(link.href).toString(),name,size:metadata.size,mimeType:metadata.mime_type||''});
+   }
+   if(args.action==='chatMedia'&&request.method==='GET'){
+    // The browser loads this same-origin URL with the existing HttpOnly
+    // session cookie. The source file is streamed, never buffered or resized.
+    await requireChatAttachmentMessage(args.convo,args.messageId,args.fileId,name);
+    const mime=chatMediaMime(name);
+    if(!mime)throw Object.assign(Error('Формат не поддерживает предпросмотр'),{status:415});
+    const source=await disk('GET','/resources',{path,fields:'type,size'});
+    if(source.type!=='file')throw Object.assign(Error('Вложение не найдено'),{status:404});
+    const rawRange=request.headers.get('range');
+    if(rawRange&&!/^bytes=(?:\d+-\d*|-\d+)$/.test(rawRange))
+     return new Response(null,{status:416,headers:{
+      'Content-Range':'bytes */'+String(source.size||0),
+      'Cache-Control':'private, no-store',
+      'X-Content-Type-Options':'nosniff'
+     }});
+    const link=await disk('GET','/resources/download',{path});
+    const upstream=await transferFetch(link.href,{
+     headers:rawRange?{Range:rawRange}:{},
+     signal:request.signal
+    });
+    if(![200,206].includes(upstream.status)||!upstream.body){
+     await upstream.body?.cancel().catch(()=>{});
+     throw Object.assign(Error('Не удалось получить медиафайл'),{status:upstream.status===404?404:502});
+    }
+    const headers=new Headers({
+     'Content-Type':mime,
+     'Content-Disposition':'inline',
+     'Cache-Control':'private, no-store',
+     'X-Content-Type-Options':'nosniff',
+     'Accept-Ranges':'bytes'
+    });
+    if(upstream.status===206){
+     const range=upstream.headers.get('content-range');
+     if(!range||!/^bytes \d+-\d+\/(?:\d+|\*)$/.test(range)){
+      await upstream.body.cancel().catch(()=>{});
+      throw Object.assign(Error('Некорректный диапазон медиафайла'),{status:502});
+     }
+     headers.set('Content-Range',range);
+    }
+    // Do not set Content-Length: Node's response bridge uses chunked transfer.
+    // The Content-Range header is preserved for video seeking and resumption.
+    return new Response(upstream.body,{status:upstream.status,headers});
    }
    if(args.action==='chatCopyToProject'&&request.method==='POST'){
     await requireChatAttachmentMessage(args.convo,args.messageId,args.fileId,name);
