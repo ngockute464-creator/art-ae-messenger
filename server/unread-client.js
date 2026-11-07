@@ -29,7 +29,7 @@ function artaeDecorateCounts(){
   byProject.set(c.project,(byProject.get(c.project)||0)+num);
  }
  const nodes=root.querySelectorAll(
-  '.convos [data-id],.sidebar [data-id],[data-act="project"][data-id],[data-act="chat"][data-id],[data-act="convo"][data-id]');
+  '.sidebar .navitem[data-act="project"][data-id],.convos .navitem[data-act="chat"][data-id]');
  for(const el of nodes){
   if(el.closest('.actionDropdown,.menuWrap,.modal,.desktopRail'))continue;
   const id=el.dataset.id;
