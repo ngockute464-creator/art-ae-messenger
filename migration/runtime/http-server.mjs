@@ -77,7 +77,7 @@ const server=createServer(async(req,res)=>{
     const out={};
     // Preserve precise byte counts only on the authenticated media route.
     const isChatMedia=url.pathname===PREFIX+'files-explorer'&&
-      url.searchParams.get('action')==='chatMedia';
+      ['chatMedia','projectMedia'].includes(url.searchParams.get('action'));
     for(const [key,value] of response.headers){
       if(['connection','transfer-encoding','set-cookie'].includes(key))continue;
       if(key==='content-length'&&!isChatMedia)continue;

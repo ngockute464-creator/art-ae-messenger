@@ -166,7 +166,8 @@ function chatMediaCopyPicker(source){
   }
  }
  save.addEventListener('click',()=>{
-  if(busy||completed)return;
+  if(busy)return;
+  if(completed){dismiss();return}
   const destName=nameInput.value.trim();
   if(!destName||destName.length>120||/[\\/:*?"<>|\x00-\x1f]/.test(destName)||
      destName==='.'||destName==='..'||destName.endsWith('.')){
@@ -192,13 +193,16 @@ function chatMediaCopyPicker(source){
     if(result.done){
      completed=true;
      status.textContent='Сохранено: '+result.path;
-     save.textContent='Готово';save.disabled=true;
-     cancel.textContent='Закрыть';
+     save.textContent='Готово';save.disabled=false;
+     cancel.hidden=true;
      if(explorer.project===source.project&&explorer.path===folder&&
         (view==='files'||railFileVisible()))void explorerLoad(folder);
     }else{
      status.textContent='Копирование продолжается на Яндекс Диске. Файл появится в выбранной папке.';
-     cancel.textContent='Закрыть';
+     // The remote asynchronous copy has been accepted. Closing the
+     // dialog must not submit the operation again.
+     completed=true;save.textContent='Готово';save.disabled=false;
+     cancel.hidden=true;
     }
    }catch(error){
     if(dialog.open){

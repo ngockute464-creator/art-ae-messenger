@@ -360,6 +360,13 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
   let signedUrl=null,blob=null;
   if(chatSource){
    signedUrl=chatMediaStreamUrl(chatSource);
+  }else if(kind==='video'){
+   // Signed cross-origin URLs cannot reliably be streamed/seeked on mobile.
+   // Do not download an entire video as a Blob: the project API supports
+   // same-origin GET, HEAD and byte-range requests using the login cookie.
+   signedUrl='/.netlify/functions/files-explorer?'+new URLSearchParams({
+    action:'projectMedia',project:explorer.project||project,path
+   });
   }else blob=await explorerFileBlob(path);
   if(!dialog.open)return;
   body.replaceChildren();
@@ -379,7 +386,7 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
     const fallback=document.createElement('p');fallback.textContent='Если браузер не показывает PDF, используйте кнопку «Скачать» рядом с файлом.';media.append(fallback);
    }else media.src=signedUrl||objectUrl;
    if(kind==='audio'||kind==='video'){media.controls=true;media.playsInline=true;media.preload='metadata'}
-   if(kind==='video'&&chatSource){
+   if(kind==='video'){
     media.addEventListener('error',()=>{
      if(!dialog.open||body.querySelector('.fileVideoError'))return;
      const notice=document.createElement('div');
@@ -388,7 +395,7 @@ async function explorerPreview(path,name,mime,chatSource=null,opener=null){
      explanation.textContent='Видео не воспроизводится в этом браузере. Возможная причина — неподдерживаемый кодек или ошибка передачи.';
      const download=document.createElement('a');
      download.className='btn small';download.textContent='Сохранить оригинал на устройство';
-     download.href=chatMediaStreamUrl(chatSource);download.download=name;
+     download.href=signedUrl||chatMediaStreamUrl(chatSource);download.download=name;
      notice.append(explanation,download);body.append(notice);
     },{once:true});
    }

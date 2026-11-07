@@ -324,4 +324,8 @@ css+='\n'+String.raw`
 .fileVideoError p{margin:0 0 8px}
 .fileVideoError a{display:inline-flex;align-items:center;min-height:36px}
 `;
+css+='\n'+String.raw`
+/* After a completed/accepted copy there is one visible Done button. */
+.chatMediaPickerFooter>[hidden]{display:none!important}
+`;
 writeFileSync(cssFile,css);
