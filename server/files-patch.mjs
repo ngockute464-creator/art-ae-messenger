@@ -15,7 +15,8 @@ const reliableSend=readFileSync('server/reliable-send.js','utf8');
 const voiceClient=readFileSync('server/voice-client.js','utf8');
 const transcriptClient=readFileSync('server/transcript-client.js','utf8');
 const chatFileClient=readFileSync('server/chat-file-client.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\nfunction cp(){','client and resize functions');
+const messageMenuClient=readFileSync('server/message-menu-client.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+messageMenuClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -100,6 +101,27 @@ replace('${getDraft().files.map((f,i)=>','${chatFileDraftHtml()}${getDraft().fil
 replace("root.addEventListener('scroll',e=>{if(openMenu!==null && e.target?.id==='msgscroll'){openMenu=null;render()}},true);",
         "/* Message menu remains open during render-driven scroll. Outside click and Escape close it. */",
         'message menu survives programmatic scroll');
+// Show edit/delete action menus only on messages and legacy file cards belonging
+// to the signed-in user. Other users' messages remain readable and pinnable via
+// shared pin UI; no one gains edit or delete privileges through this change.
+replace("${actionMenu('message:'+m.id,objectActions('message',m.id,c.id,mine))}",
+        "${mine?actionMenu('message:'+m.id,objectActions('message',m.id,c.id,mine)):''}",
+        'message actions restricted to author');
+replace("${actionMenu('file:'+f.id,objectActions('file',f.id,c.id,mine))}",
+        "${mine?actionMenu('file:'+f.id,objectActions('file',f.id,c.id,mine)):''}",
+        'file actions restricted to author');
+replace("if(action==='toggleMenu'){openMenu=openMenu===el.dataset.menu?null:el.dataset.menu;render();return}",
+        "if(action==='toggleMenu'){toggleMessageMenuDom(el);return}",
+        'message menu DOM toggle without render');
+replace("const dropdown=activeButton.closest('.menuWrap')?.querySelector('.actionDropdown');",
+        "const dropdown=activeButton.closest('.menuWrap')?.querySelector('.actionDropdown')||root.querySelector('.app > .actionDropdown');",
+        'portal dropdown remains positionable after move');
+replace("holdTimer=setTimeout(()=>{openMenu=key;holdTriggered=true;render()},550);",
+        "holdTimer=setTimeout(()=>{const button=[...root.querySelectorAll('.moreBtn')].find(b=>b.dataset.menu===key);if(button){toggleMessageMenuDom(button);holdTriggered=true}},550);",
+        'touch long-press opens without rerender');
+replace("if(btn){e.preventDefault();openMenu=btn.dataset.menu;render()}",
+        "if(btn){e.preventDefault();toggleMessageMenuDom(btn)}",
+        'touch context menu opens without rerender');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
