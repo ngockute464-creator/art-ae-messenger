@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 const gitBuild=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(!/^[a-f0-9]{40}$/.test(gitBuild))throw Error('PWA: no verified Git build SHA');
 const buildId=gitBuild; // The release manager and GitHub Actions both use pinned Git checkouts.
-const version='0.4.8-preview';
+const version='0.4.9-preview';
 
 const indexPath='public/index.html';
 let html=readFileSync(indexPath,'utf8');
