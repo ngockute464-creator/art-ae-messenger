@@ -97,6 +97,7 @@ jobs:
           bash -n migration/deploy/switch-local.sh
           bash -n migration/deploy/apply-message-reads.sh
           bash -n migration/deploy/bootstrap-push.sh
+          bash -n migration/deploy/apply-message-erasure.sh
 
 
   verify-unread-postgres:
