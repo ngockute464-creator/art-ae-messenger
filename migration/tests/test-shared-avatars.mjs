@@ -1,6 +1,7 @@
 // Shared avatars: identity, security, render plumbing and removal of stale local-only behavior.
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {runInNewContext} from 'node:vm';
 const api=readFileSync('migration/runtime/avatars.mjs','utf8');
 const app=readFileSync('public/app.js','utf8');
@@ -46,7 +47,7 @@ const query=async(sql,params=[])=>{
 };
 const source=api.replace(/^import .*;$/gm,'').replace('export default async function handler','async function handler');
 const handler=runInNewContext(source+'\nhandler',{
- query,getSession:async()=>({user:{id:currentUser}}),Response,URL,console,Date,Object,Error
+ query,createHash,getSession:async()=>({user:{id:currentUser}}),Response,URL,console,Date,Object,Error
 });
 const request=async(action,avatar,origin='https://artae.example')=>{
  const r=await handler(new Request('https://artae.example/.netlify/functions/avatars',{
