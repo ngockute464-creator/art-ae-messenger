@@ -40,7 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const fs=require('fs');const s=fs.readFileSync('public/app.js','utf8'),css=fs.readFileSync('public/styles.css','utf8');for(const term of ['function mark(','function editLabels','function messageView(','function pinCard(','function pinsView(']){let i=s.indexOf(term);console.log('UI_INSPECT_2',term,i,i>=0?s.slice(i,i+2500).replace(/\\n/g,' '):'')}for(const term of ['.chips','.chip','@media(max-width:650px)']){let i=css.indexOf(term);console.log('UI_INSPECT_CSS',term,i,i>=0?css.slice(i,i+850).replace(/\\n/g,' '):'')}}"
+          node -e "const fs=require('fs');const s=fs.readFileSync('public/app.js','utf8');for(const term of ['function mark(','function editLabels','function messageView(']){const i=s.indexOf(term);console.log('UI_INSPECT_3',term,i,i>=0?s.slice(i,i+2400):'')}"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
