@@ -40,7 +40,8 @@ function makeOfficeFrame(kind,name){
  frame.className='artaeOfficeFrame';
  frame.title='VibeOffice — '+name;
  frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-downloads allow-modals');
- frame.src='/office/'+kind+'/';
+ const build=document.querySelector('meta[name="artae-build"]')?.content;
+ frame.src='/office/'+kind+'/'+(build&&/^[a-f0-9]{40}$/i.test(build)?'?build='+build.slice(0,12):'');
  return frame;
 }
 // Starts the DOCX engine after the user has opened an authenticated project's files.
