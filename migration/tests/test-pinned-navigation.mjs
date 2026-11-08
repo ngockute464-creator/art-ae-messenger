@@ -58,5 +58,5 @@ assert.equal(msgEnv.connected,'c1','Realtime reconnects to target conversation')
 assert.equal(msgEnv.scrolled,true,'Target message becomes visible');
 assert.equal(msgEnv.highlightId,'m1');
 
-assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\\.4\\.17-preview"/);
+assert.equal(JSON.parse(readFileSync('public/app-version.json','utf8')).version,'0.4.17-preview');
 console.log('PINNED_NAVIGATION_OK message=true history=true file_folder=true root=true');
