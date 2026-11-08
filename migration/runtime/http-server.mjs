@@ -6,6 +6,7 @@ import {Readable} from 'node:stream';
 import auth from './auth.mjs';
 import sync from './sync.mjs';
 import pins from './pins.mjs';
+import labels from './labels.mjs';
 import filesExplorer from './files-explorer.mjs';
 import voice from './voice.mjs';
 import voiceTranscript from './voice-transcript.mjs';
