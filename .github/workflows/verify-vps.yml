@@ -72,6 +72,9 @@ jobs:
           node migration/tests/test-office-native-readonly.mjs
           node migration/tests/test-office-xlsm-preview.mjs
           node migration/tests/test-pinned-navigation.mjs
+          node migration/tests/test-shared-labels.mjs
+          node --check migration/runtime/labels.mjs
+          test -s migration/sql/007_shared_labels.sql
           node migration/tests/test-office-save-move-link.mjs
           test -s public/office/artae-readonly.js
           node --check public/office/artae-readonly.js
@@ -121,6 +124,7 @@ jobs:
           bash -n deploy/artae-auto.sh
           bash -n migration/deploy/switch-local.sh
           bash -n migration/deploy/apply-message-reads.sh
+          bash -n migration/deploy/apply-shared-labels.sh
           bash -n migration/deploy/bootstrap-push.sh
           bash -n migration/deploy/apply-message-erasure.sh
           bash -n migration/deploy/bootstrap-chat-file-deletions.sh
