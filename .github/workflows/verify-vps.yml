@@ -70,6 +70,7 @@ jobs:
           node migration/tests/test-pdf-scroll-mode.mjs
           node migration/tests/test-office-pdfjs-inline.mjs
           node migration/tests/test-office-native-readonly.mjs
+          node migration/tests/test-office-save-move-link.mjs
           test -s public/office/artae-readonly.js
           node --check public/office/artae-readonly.js
           test -s public/vendor/pdfjs/pdf.mjs
