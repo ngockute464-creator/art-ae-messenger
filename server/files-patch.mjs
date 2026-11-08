@@ -56,6 +56,8 @@ replace("if(action==='filesHome')openExplorer();","if(action==='trashProject')tr
 replace("if(action==='trashProject')trashProject(id);","if(action==='retrySend'){retryOutgoing(id);return}else if(action==='trashProject')trashProject(id);",'retry outgoing action');
 
 replace("data.pins=preferences.pins||[];data.labels=preferences.labels||[];","data.pins=[];data.labels=preferences.labels||[];",'ux patch 1');
+replace("function labelList(kind,item){return data.labels.filter(l=>l.kind===kind&&l.item===item)}",
+        "function labelList(kind,item){return data.labels.filter(l=>l.kind===kind&&l.item===item&&(!l.project||l.project===project))}",'project scoped labels');
 replace("profile:data.profile,pins:data.pins,labels:data.labels","profile:data.profile,labels:data.labels",'ux patch 2');
 replace("async function beginSync(){try{await syncOverview();syncReady=true;","async function beginSync(){try{await syncOverview();restoreWorkplace();await refreshPins();queueMicrotask(()=>refreshRailFiles());syncReady=true;",'ux patch 3');
 replace("📌 Закреплено</button>","📌 <span class=\"pinLabel\">Закреплено</span></button>",'ux patch 4');
