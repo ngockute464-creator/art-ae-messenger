@@ -1,5 +1,5 @@
 // PostgreSQL is the sole source of truth for project labels.
-let labelsProject=null,labelsBusy=false,labelsLastFetch=0;
+let labelsProject=null,labelsBusy=false,labelsLastFetch=0,labelsPending=false;
 function labelOwner(kind,item){
  if(kind==='message'){
   const m=data.messages.find(m=>m.id===item);
@@ -24,12 +24,13 @@ async function labelsRequest(action,payload={},get=false){
   ...(get?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...payload})})
  });
  let result={};try{result=await response.json()}catch{}
- if(!response.ok)throw Error(result.error||'Не удалось синхронизировать метки');
+ if(!response.ok){const error=Error(result.error||'Не удалось синхронизировать метки');error.status=response.status;throw error}
  return result;
 }
 async function refreshSharedLabels(force=false){
  const target=project;
- if(!target||labelsBusy||!document.body)return;
+ if(!target||!document.body)return;
+ if(labelsBusy){if(force||labelsProject!==target)labelsPending=true;return}
  if(!force&&target===labelsProject&&Date.now()-labelsLastFetch<5000)return;
  labelsBusy=true;
  try{
@@ -41,14 +42,22 @@ async function refreshSharedLabels(force=false){
   labelsProject=target;labelsLastFetch=Date.now();
   if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
  }catch(error){console.warn('Shared labels:',error.message)}
- finally{labelsBusy=false}
+ finally{
+  labelsBusy=false;
+  if(labelsPending||(project&&project!==target)){
+   labelsPending=false;
+   queueMicrotask(()=>void refreshSharedLabels(true));
+  }
+ }
 }
 async function saveSharedLabels(kind,item,text){
  const target=labelOwner(kind,item)||project;
  if(!target)throw Error('Проект метки не определён');
  const names=[...new Set(String(text).split(',').map(n=>n.trim()).filter(Boolean))].slice(0,12);
  if(names.some(n=>n.length>40))throw Error('Метка длиннее 40 символов');
- await labelsRequest('set',{project:target,kind,item,names});
+ const expectedNames=data.labels.filter(l=>l.project===target&&l.kind===kind&&l.item===item).map(l=>l.name);
+ try{await labelsRequest('set',{project:target,kind,item,names,expectedNames})}
+ catch(error){if(error.status===409)await refreshSharedLabels(true);throw error}
  data.labels=data.labels.filter(l=>!(l.project===target&&l.kind===kind&&l.item===item));
  for(const name of names)data.labels.push({kind,item,name,project:target});
  labelsProject=target;labelsLastFetch=0;
