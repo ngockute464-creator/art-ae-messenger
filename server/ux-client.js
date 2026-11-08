@@ -152,11 +152,16 @@ async function railJumpPin(item,targetConvo){
  if(convo!==c.id||view!=='chat')return;
  connectRealtime(c.id);
  render();
- requestAnimationFrame(()=>{
+ let attempts=0;
+ const reveal=()=>{
+  if(convo!==c.id||view!=='chat')return;
   const target=document.getElementById(item);
-  if(target)target.scrollIntoView({block:'center'});
-  else console.warn('Pinned message not found in loaded conversation',item);
- });
+  if(target){target.scrollIntoView({block:'center'});return}
+  // A concurrent sync may be finishing; don't leave the user at the wrong message.
+  if(++attempts<25){setTimeout(reveal,120);return}
+  console.warn('Pinned message not found in loaded conversation',item);
+ };
+ requestAnimationFrame(reveal);
 }
 function jumpPinnedFile(path){
  if(typeof path!=='string'||!path||path.startsWith('/')||path.includes('\\')||path.includes('//'))
