@@ -40,6 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
+          node -e "const s=require('fs').readFileSync('public/app.js','utf8');for(const term of ['function messageView(m)','function profileView(','function initial(','m.type===\x27editProfile\x27','modal.type===\x27editProfile\x27','function render()','data.profile=','function editProfile']){const i=s.indexOf(term);console.log('AVATAR_INSPECT',term,i,i>=0?s.slice(i,i+2200):'')}"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
