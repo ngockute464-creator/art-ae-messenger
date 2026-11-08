@@ -23,7 +23,7 @@ let explorerRequest=0;
 const fileEnv={
  explorer:{path:'',loading:false},get explorerRequest(){return explorerRequest},
  setTimeout(fn){fn()},project:'project1',alert(s){alerted=s},
- openExplorer(path){folder=path;this.explorer.path=path;explorerRequest++},
+ openExplorer(path){folder=path;fileEnv.explorer.path=path;explorerRequest++},
  root:{querySelectorAll(){return [item]}}
 };
 const jumpPinnedFile=runInNewContext(fileCode+'\njumpPinnedFile',fileEnv);
@@ -42,12 +42,12 @@ const msgEnv={
  project:'p1',convo:'old',view:'pins',highlightId:null,openMenu:'open',
  data:{convos:[{id:'c1',project:'p1'}],messages:[]},
  lastMessageCursor:{c1:54321},render(){},saveWorkplace(){},
- stopRealtime(){this.stopped=true},
- async syncMessages(){this.data.messages.push({id:'m1',convo:'c1'})},
- connectRealtime(id){this.connected=id},
+ stopRealtime(){msgEnv.stopped=true},
+ async syncMessages(){msgEnv.data.messages.push({id:'m1',convo:'c1'})},
+ connectRealtime(id){msgEnv.connected=id},
  requestAnimationFrame(fn){fn()},
  document:{getElementById(id){return id==='m1'?{scrollIntoView(){msgEnv.scrolled=true}}:null}},
- alert(message){this.alerted=message}
+ alert(message){msgEnv.alerted=message}
 };
 const jumpMessage=runInNewContext(msgCode+'\nrailJumpPin',msgEnv);
 await jumpMessage('m1','c1');
