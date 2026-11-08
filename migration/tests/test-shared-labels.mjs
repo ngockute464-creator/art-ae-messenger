@@ -38,7 +38,9 @@ const query=async (sql,params=[])=>{
   return {rows:[]};
  }
  if(sql.startsWith('INSERT INTO public.artae_labels')){
-  const [project,kind,item,name]=params;rows.set([project,kind,item,name].join('|'),{project,kind,item,name});return {rows:[]};
+  const [project,kind,item,name]=sql.includes("VALUES($1,'message'")?
+   [params[0],'message',params[1],params[2]]:params;
+  rows.set([project,kind,item,name].join('|'),{project,kind,item,name});return {rows:[]};
  }
  throw Error('Unexpected SQL '+sql);
 };
