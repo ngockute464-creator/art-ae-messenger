@@ -7,6 +7,7 @@ import auth from './auth.mjs';
 import sync from './sync.mjs';
 import pins from './pins.mjs';
 import labels from './labels.mjs';
+import avatars from './avatars.mjs';
 import filesExplorer from './files-explorer.mjs';
 import voice from './voice.mjs';
 import voiceTranscript from './voice-transcript.mjs';
@@ -24,7 +25,7 @@ const MAX_BODY=4*1024*1024;
 const PREFIX='/.netlify/functions/';
 const realtimeDisabled=()=>Response.json({enabled:false,error:'Local Realtime not yet enabled'},{status:503,headers:noCache});
 const handlers=new Map([
-  ['auth',auth],['sync',sync],['pins',pins],['labels',labels],
+  ['auth',auth],['sync',sync],['pins',pins],['labels',labels],['avatars',avatars],
   ['files-explorer',filesExplorer],['voice',voice],['voice-transcript',voiceTranscript],
   ['realtime-token',realtimeDisabled],['push',push]
 ]);
