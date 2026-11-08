@@ -63,6 +63,19 @@ function guard(obj,name,denied){
  const original=obj[name];
  property(obj,name,function(...args){return active?denied:original.apply(this,args)});
 }
+// Suppress only the editor's automatic keyboard focus, not search fields.
+function protectEditorFocus(obj,method){
+ if(typeof obj?.[method]!=='function')throw Error('Cannot protect focus: '+method);
+ const original=obj[method];
+ property(obj,method,function(...args){
+  if(active)return;
+  return original.apply(this,args);
+ });
+}
+function blurEditorSurface(element){
+ if(element&&document.activeElement===element&&typeof element.blur==='function')
+  element.blur();
+}
 function release(){
  if(!active&&!undo.length)return;
  active=false;
@@ -98,6 +111,8 @@ function activate(next){
    property(L.ed,'readOnly',true);
    property(L.layout.root,'contentEditable','false');
    guard(L.D,'tx',false);
+   protectEditorFocus(L.ed,'focus');
+   protectEditorFocus(L.ed,'refocus');
   }else{
    if(!L.ops||!L.grid||!L.editor)throw Error('Ledger view-only API unavailable');
    guard(L.ops,'tx',false);
@@ -107,6 +122,7 @@ function activate(next){
    if(formula)property(formula,'readOnly',true);
    const input=L.grid.input;
    if(input)property(input,'readOnly',true);
+   protectEditorFocus(L.grid,'focus');
   }
   guard(L,'saveFile',undefined);
   if(typeof L.ui.exec!=='function')throw Error('VibeOffice commands unavailable');
@@ -118,6 +134,10 @@ function activate(next){
   kind=next;
   document.documentElement.dataset.artaeOfficeViewer='1';
   active=true;
+  // Quire may have queued refocus before activation; immediately release its
+  // editable surface so mobile keyboards can close. Find inputs are untouched.
+  if(next==='quire')blurEditorSurface(L.layout.root);
+  else blurEditorSurface(L.grid.input);
  }catch(e){release();throw e}
 }
 window.ARTAE_OFFICE_READONLY={activate,release,get active(){return active},get kind(){return kind}};
