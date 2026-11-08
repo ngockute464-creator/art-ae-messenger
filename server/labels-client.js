@@ -90,7 +90,10 @@ async function refreshSharedLabels(force=false){
   const reply=await labelsRequest('',{project:target},true);
   if(project!==target)return;
   const shared=(reply.labels||[]).map(l=>({...l,project:target}));
-  data.labels=data.labels.filter(l=>l.project!==target&&(!labelOwner(l.kind,l.item)||labelOwner(l.kind,l.item)!==target)).concat(shared);
+  const sharedKeys=new Set(shared.map(l=>l.kind+'|'+l.item+'|'+l.name));
+  data.labels=data.labels.filter(l=>l.project!==target&&
+   !sharedKeys.has(l.kind+'|'+l.item+'|'+l.name)&&
+   (!labelOwner(l.kind,l.item)||labelOwner(l.kind,l.item)!==target)).concat(shared);
   labelsProject=target;labelsLastFetch=Date.now();labelsActive=true;
   if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
  }catch(error){console.warn('Shared labels:',error.message)}
