@@ -46,7 +46,7 @@ function mockEnv(which){
   api.ed={readOnly:false};
   api.layout={root:{contentEditable:'true'},setMultiPage(n){calls.push('multi:'+n)},
    zoomFor(x){return x==='pageWidth'?0.9:1},setZoom(z){calls.push('zoom:'+z)}};
-  api.doc={tx(name,fn){return fn()}};
+  api.D={tx(name,fn){return fn()}};
  }else{
   api.ops={tx(wb,name,fn){return fn()}};
   api.grid={guardProtect(){return false},input:{tagName:'TEXTAREA',id:'grid-input',readOnly:false}};
@@ -59,13 +59,17 @@ function mockEnv(which){
  assert.ok(ro&&typeof ro.activate==='function');
  return {ro,doc,api,listeners};
 }
-const q=mockEnv('quire'),oldTx=q.api.doc.tx,oldExec=q.api.ui.exec;
+const q=mockEnv('quire'),oldTx=q.api.D.tx,oldExec=q.api.ui.exec;
+// Quire's pinned model is exposed as L.D, not L.doc.
+assert.match(quireModel,/const D = \(L\.D = \{\}\)/);
+assert.match(src,/guard\(L\.D,'tx',false\)/);
+assert.doesNotMatch(src,/L\.doc/);
 q.ro.activate('quire');
 assert.equal(q.ro.active,true);
 assert.equal(q.api.app.view,'reading');
 assert.equal(q.api.ed.readOnly,true);
 assert.equal(q.api.layout.root.contentEditable,'false');
-assert.equal(q.api.doc.tx('change',()=>{mutations++}),false);
+assert.equal(q.api.D.tx('change',()=>{mutations++}),false);
 assert.equal(q.api.saveFile('a.docx'),undefined);
 assert.equal(q.api.ui.exec('save'),false);
 assert.equal(q.api.ui.exec('find'),true);
@@ -87,12 +91,12 @@ assert.deepEqual(checkKeyboard(q,'beforeinput','', 'INPUT','find-term'),{prevent
 assert.deepEqual(checkKeyboard(q,'beforeinput','', 'DIV','pages'),{prevented:true,stopped:true});
 q.ro.release();
 assert.equal(q.ro.active,false);
-assert.equal(q.api.doc.tx,oldTx);
+assert.equal(q.api.D.tx,oldTx);
 assert.equal(q.api.ui.exec,oldExec);
 assert.equal(q.api.ed.readOnly,false);
 assert.equal(q.api.layout.root.contentEditable,'true');
 assert.equal(q.api.app.view,'print');
-q.api.doc.tx('edit',()=>{mutations++});
+q.api.D.tx('edit',()=>{mutations++});
 assert.equal(mutations,1,'Quire edits work again in true edit mode');
 
 const x=mockEnv('ledger');
