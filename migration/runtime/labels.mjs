@@ -58,46 +58,6 @@ export default async function handler(req){
    });
    return reply({ok:true});
   }
-  if(action==='importLegacy'){
-   // Legacy browsers did not record a project per label. Resolve message
-   // ownership in PostgreSQL; never guess from the currently open project.
-   if(!Array.isArray(arg.labels)||arg.labels.length>200)throw reject('Недопустимый импорт');
-   const valid=[];
-   for(const row of arg.labels){
-    if(!row||row.kind!=='message'||!uuid(row.item))continue;
-    const names=namesOf(row.names);
-    const {rows:[m]}=await query(
-     'SELECT c.project_id FROM public.artae_messages m '+
-     'JOIN public.artae_conversations c ON c.id=m.conversation_id '+
-     'JOIN public.artae_projects p ON p.id=c.project_id '+
-     'WHERE m.id=$1 AND m.deleted_at IS NULL AND c.deleted_at IS NULL AND p.deleted_at IS NULL',
-     [row.item]);
-    if(m)valid.push({project:m.project_id,item:row.item,names});
-   }
-   await transaction(async tx=>{
-    for(const row of valid)for(const name of row.names)await tx(
-     'INSERT INTO public.artae_labels(project_id,item_kind,item_key,name,created_by,created_at) '+
-     "VALUES($1,'message',$2,$3,$4,$5) ON CONFLICT DO NOTHING",
-     [row.project,row.item,name,session.user.id,Date.now()]);
-   });
-   return reply({ok:true,imported:valid.map(({project,item,names})=>({project,item,names}))});
-  }
-  if(action==='merge'){
-   if(!Array.isArray(arg.labels)||arg.labels.length>300)throw reject('Недопустимый импорт');
-   const rows=[];
-   for(const entry of arg.labels){
-    if(!entry||typeof entry!=='object')throw reject('Недопустимый импорт');
-    await validate(project,entry.kind,entry.item);
-    rows.push({kind:entry.kind,item:entry.item,names:namesOf(entry.names)});
-   }
-   await transaction(async tx=>{
-    for(const row of rows)for(const name of row.names)await tx(
-     'INSERT INTO public.artae_labels(project_id,item_kind,item_key,name,created_by,created_at) '+
-     'VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING',
-     [project,row.kind,row.item,name,session.user.id,Date.now()]);
-   });
-   return reply({ok:true});
-  }
   return reply({error:'Неизвестное действие'},404);
  }catch(e){
   if(e.status&&e.status<500)return reply({error:e.message},e.status);
