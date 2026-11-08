@@ -8,7 +8,9 @@ try{labelImports=JSON.parse(localStorage.getItem(LABEL_IMPORT_KEY)||'{}')||{}}ca
 function labelOwner(kind,item){
  if(kind==='message'){
   const m=data.messages.find(m=>m.id===item);
-  return data.convos.find(c=>c.id===m?.convo)?.project||null;
+  const pin=data.pins.find(p=>p.kind==='message'&&p.item===item&&p.convoId);
+  const convoId=m?.convo||pin?.convoId;
+  return data.convos.find(c=>c.id===convoId)?.project||null;
  }
  if(kind==='file'){
   if(data.files.some(f=>f.id===item)){
