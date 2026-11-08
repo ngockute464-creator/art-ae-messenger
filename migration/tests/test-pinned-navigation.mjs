@@ -19,7 +19,6 @@ assert.ok(ux.includes('explorerFileTypeIcon(name)'),'Pinned file uses explorer S
 assert.ok(ux.includes('artaePinnedFileCard'),'Pinned file does not imitate a chat message');
 assert.ok(ux.includes('artaePinnedFileRemove'),'Pinned file has direct unpin control');
 assert.ok(!ux.includes("'📄 ':'📌 '"),'Rail file pins no longer use emoji file icons');
-const patch=readFileSync('server/files-patch.mjs','utf8');
 assert.ok(patch.includes('.pin-card,.artaePinnedFileCard{border:2px'),'Pinned cards use thicker borders');
 
 
