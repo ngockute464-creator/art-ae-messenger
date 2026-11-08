@@ -89,10 +89,17 @@ addEventListener('message',async event=>{
  }
  if(msg.type!=='artae-office-open')return;
  if(!ready()){window.parent.postMessage({type:'artae-office-error',message:'Редактор ещё не готов'},origin);return}
- const expected=document.documentElement.dataset.app==='quire'?'.docx':'.xlsx';
- if(typeof msg.name!=='string'||!msg.name.toLowerCase().endsWith(expected)||!(msg.buffer instanceof ArrayBuffer))return;
+ const app=document.documentElement.dataset.app;
+ const ext=typeof msg.name==='string'?msg.name.toLowerCase().split('.').pop():'';
+ const accepted=app==='quire'?ext==='docx':app==='ledger'&&(ext==='xlsx'||ext==='xlsm');
+ if(!accepted||!(msg.buffer instanceof ArrayBuffer))return;
+ if(ext==='xlsm'&&(msg.readonly!==true||msg.remoteSave===true)){
+  window.parent.postMessage({type:'artae-office-error',message:'XLSM доступен только для просмотра'},origin);return;
+ }
  try{
-  const file=new File([msg.buffer],msg.name,{type:expected==='.docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const type=ext==='docx'?'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+   ext==='xlsm'?'application/vnd.ms-excel.sheet.macroEnabled.12':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const file=new File([msg.buffer],msg.name,{type});
   if(viewOnly()?.active)viewOnly().release();
   if(msg.readonly===true&&(!viewOnly()||msg.remoteSave===true))
    throw Error('Безопасный режим просмотра недоступен');
