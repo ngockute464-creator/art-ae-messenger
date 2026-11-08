@@ -21,6 +21,7 @@ assert.doesNotMatch(sql,/DROP TABLE|TRUNCATE|DELETE FROM|ALTER TABLE public\.art
 assert.match(script,/pg_dump --format=custom/,'Pre-migration backup is mandatory');
 assert.match(script,/EXPECTED_SHA/,'Migrate only pinned commit');
 assert.match(client,/legacyLabels/,'Original local labels kept for recovery');
+assert.match(client,/const sharedKeys=new Set/,'Imported labels must not display twice');
 assert.match(client,/ON CONFLICT|labelsRequest\('merge'/,'One-time merge process');
 
 const project='11111111-1111-4111-8111-111111111111';
