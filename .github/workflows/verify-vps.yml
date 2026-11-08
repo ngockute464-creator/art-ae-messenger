@@ -40,7 +40,6 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
