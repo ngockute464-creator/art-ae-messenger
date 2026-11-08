@@ -31,6 +31,7 @@ const calls=[];
 function mockEnv(which){
  const listeners={};
  const doc={
+  activeElement:null,
   head:{append(){}},
   documentElement:{dataset:{}},
   createElement(type){return {tag:type,textContent:''}},
@@ -43,13 +44,17 @@ function mockEnv(which){
   saveFile(){mutations++;return 'download'}
  };
  if(which==='quire'){
-  api.ed={readOnly:false};
-  api.layout={root:{contentEditable:'true'},setMultiPage(n){calls.push('multi:'+n)},
+  api.ed={readOnly:false,focus(){calls.push('quire:focus')},refocus(){calls.push('quire:refocus')}};
+  const root={contentEditable:'true',blur(){calls.push('quire:blur');doc.activeElement=null}};
+  doc.activeElement=root;
+  api.layout={root,setMultiPage(n){calls.push('multi:'+n)},
    zoomFor(x){return x==='pageWidth'?0.9:1},setZoom(z){calls.push('zoom:'+z)}};
   api.D={tx(name,fn){return fn()}};
  }else{
   api.ops={tx(wb,name,fn){return fn()}};
-  api.grid={guardProtect(){return false},input:{tagName:'TEXTAREA',id:'grid-input',readOnly:false}};
+  const input={tagName:'TEXTAREA',id:'grid-input',readOnly:false,blur(){calls.push('ledger:blur');doc.activeElement=null}};
+  doc.activeElement=input;
+  api.grid={guardProtect(){return false},focus(){calls.push('ledger:focus')},input};
   api.editor={begin(){mutations++;return true}};
   api.app.activateSheet=function(i){calls.push('sheet:'+i)};
  }
@@ -60,6 +65,7 @@ function mockEnv(which){
  return {ro,doc,api,listeners};
 }
 const q=mockEnv('quire'),oldTx=q.api.D.tx,oldExec=q.api.ui.exec;
+const oldQuireFocus=q.api.ed.focus,oldQuireRefocus=q.api.ed.refocus;
 // Quire's pinned model is exposed as L.D, not L.doc.
 assert.match(quireModel,/const D = \(L\.D = \{\}\)/);
 assert.match(src,/guard\(L\.D,'tx',false\)/);
@@ -69,6 +75,10 @@ assert.match(readFileSync('server/office-patch.mjs','utf8'),/artae-readonly\.js\
 assert.doesNotMatch(src,/L\.doc/);
 q.ro.activate('quire');
 assert.equal(q.ro.active,true);
+assert.ok(calls.includes('quire:blur'),'Active Quire editing surface must blur');
+const quireFocusCalls=calls.length;
+q.api.ed.focus();q.api.ed.refocus();
+assert.equal(calls.length,quireFocusCalls,'Read-only Quire must not auto focus or refocus');
 assert.equal(q.api.app.view,'reading');
 assert.equal(q.api.ed.readOnly,true);
 assert.equal(q.api.layout.root.contentEditable,'false');
@@ -98,15 +108,24 @@ assert.equal(q.ro.active,false);
 assert.equal(q.api.D.tx,oldTx);
 assert.equal(q.api.ui.exec,oldExec);
 assert.equal(q.api.ed.readOnly,false);
+assert.equal(q.api.ed.focus,oldQuireFocus);
+assert.equal(q.api.ed.refocus,oldQuireRefocus);
+q.api.ed.focus();q.api.ed.refocus();
+assert.ok(calls.includes('quire:focus')&&calls.includes('quire:refocus'), 'Edit mode retains focusing');
 assert.equal(q.api.layout.root.contentEditable,'true');
 assert.equal(q.api.app.view,'print');
 q.api.D.tx('edit',()=>{mutations++});
 assert.equal(mutations,1,'Quire edits work again in true edit mode');
 
 const x=mockEnv('ledger');
+const oldGridFocus=x.api.grid.focus;
 const oldLedger={tx:x.api.ops.tx,protect:x.api.grid.guardProtect,begin:x.api.editor.begin,
  save:x.api.saveFile,exec:x.api.ui.exec};
 x.ro.activate('ledger');
+assert.ok(calls.includes('ledger:blur'),'Ledger input must release keyboard focus');
+const ledgerFocusCalls=calls.length;
+x.api.grid.focus();
+assert.equal(calls.length,ledgerFocusCalls,'Read-only Ledger must not auto focus');
 assert.equal(x.api.ops.tx(null,'edit',()=>{mutations++}),false);
 assert.equal(x.api.grid.guardProtect(),true);
 assert.equal(x.api.editor.begin(),undefined);
@@ -127,6 +146,8 @@ for(const [k,v] of Object.entries(oldLedger)){
  assert.equal(actual,v,'Ledger '+k+' must be restored');
 }
 assert.equal(x.api.grid.input.readOnly,false);
+assert.equal(x.api.grid.focus,oldGridFocus);
+x.api.grid.focus();assert.ok(calls.includes('ledger:focus'),'Ledger edit mode focus restored');
 x.api.ops.tx(null,'edit',()=>{mutations++});
 assert.equal(mutations,2);
 
@@ -147,5 +168,5 @@ for(const p of ['server/office-client.js','office-site/integration/office-client
  assert.doesNotMatch(client,/if\(ctx\.mode==='preview'\)\{state\.textContent='Создаём PDF…'/);
  assert.match(client,/mode==='edit'&&!localFile/,'Edit still requires its lease');
 }
-assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.11-preview"/);
+assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.12-preview"/);
 console.log('OFFICE_NATIVE_READONLY_OK quire=true ledger=true search=true sheet_navigation=true restores=true no_auto_pdf=true');
