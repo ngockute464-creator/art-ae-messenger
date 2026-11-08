@@ -33,6 +33,27 @@ function preventMutation(event){
 }
 for(const name of ['beforeinput','paste','drop','cut','compositionstart','keydown'])
  document.addEventListener(name,preventMutation,true);
+// Quire can enter header/footer editing from a native double tap. Keep the
+// browser's own text-selection behavior, but never run editor dblclick actions.
+document.addEventListener('dblclick',event=>{
+ if(!active||kind!=='quire')return;
+ const root=window.L?.layout?.root;
+ if(root&&(event.target===root||root.contains?.(event.target)))
+  event.stopImmediatePropagation();
+},true);
+// Mobile browsers can focus a contenteditable descendant without calling
+// Quire's E.focus/refocus. Release that focus before it opens the keyboard.
+// Unlike a global blur or touch preventDefault, Find inputs and selection remain usable.
+document.addEventListener('focusin',event=>{
+ if(!active)return;
+ const target=event.target;
+ const L=window.L;
+ const root=kind==='quire'?L?.layout?.root:null;
+ const cellInput=kind==='ledger'?L?.grid?.input:null;
+ if((root&&(target===root||root.contains?.(target)))||
+    (cellInput&&target===cellInput))
+  target?.blur?.();
+},true);
 const style=document.createElement('style');
 style.textContent=[
  'html[data-artae-office-viewer="1"] .cmdbars,',
