@@ -131,7 +131,7 @@ jobs:
 
 
   verify-unread-postgres:
-    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files' || github.ref == 'refs/heads/fix/viewer-focus-chat-attachment-deletion'
+    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files' || github.ref == 'refs/heads/fix/viewer-focus-chat-attachment-deletion' || github.ref == 'refs/heads/feature/office-native-readonly-preview'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
@@ -179,3 +179,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f migration/sql/006_chat_file_deletions.sql
           psql -v ON_ERROR_STOP=1 -f migration/sql/006_chat_file_deletions.sql
           psql -v ON_ERROR_STOP=1 -f migration/tests/verify-chat-file-deletions.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/007_shared_labels.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/007_shared_labels.sql
+          psql -At -c "SELECT count(*) FROM public.artae_schema_migrations WHERE version='007_shared_labels'" | grep -qx 1
+          psql -v ON_ERROR_STOP=1 -c "SET ROLE artae_app; SELECT count(*) FROM public.artae_labels; RESET ROLE;"
+          echo 'SHARED_LABELS_POSTGRES_OK migration_twice=true runtime_grants=true'
