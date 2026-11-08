@@ -37,5 +37,5 @@ assert.ok(bridge.includes('viewOnly().activate(document.documentElement.dataset.
  'Read-only transaction guard remains active');
 assert.ok(source.includes('function explorerPreview('),'Explorer included in assembled app');
 const version=JSON.parse(readFileSync('public/app-version.json','utf8'));
-assert.equal(version.version,'0.4.21-preview');
+assert.equal(version.version,'0.4.22-preview');
 console.log('OFFICE_XLSM_PREVIEW_OK ledger=true readonly=true edit_blocked=true');
