@@ -88,6 +88,20 @@ function transferUrl(href){
   throw Object.assign(Error('Недопустимый адрес передачи файла'),{status:502});
  return u;
 }
+// A successful synchronous move returns a *resource* Link (201), whereas
+// an asynchronous move returns an operation Link (202). Never poll a resource.
+function classifyOfficeMoveLink(href){
+ const u=transferUrl(href);
+ if(u.hostname!=='cloud-api.yandex.net'||u.hash)
+  throw Object.assign(Error('Недопустимая ссылка операции Яндекс Диска'),{status:502});
+ if(u.pathname==='/v1/disk/resources'&&u.searchParams.has('path'))
+  return {completed:true};
+ const match=u.pathname.match(/^\/v1\/disk\/operations\/([a-zA-Z0-9_-]{6,128})$/);
+ if(!match||u.search)
+  throw Object.assign(Error('Некорректная операция Яндекс Диска'),{status:502});
+ return {completed:false,id:match[1]};
+}
+
 async function transferFetch(href,options={}){
  let current=transferUrl(href);
  for(let hop=0;hop<6;hop++){
@@ -313,12 +327,10 @@ export default async function handler(request){
    const operation=await disk('POST','/resources/move',{from:stage,path:final,overwrite:'true'});
    // Yandex may schedule moving large files as an asynchronous operation.
    if(operation?.href){
-    const opUrl=transferUrl(operation.href);
-    const match=opUrl.pathname.match(/^\/v1\/disk\/operations\/([a-zA-Z0-9_-]+)$/);
-    if(!match)throw Object.assign(Error('Некорректная операция Яндекс Диска'),{status:502});
-    for(let attempt=0;attempt<12;attempt++){
+    const move=classifyOfficeMoveLink(operation.href);
+    if(!move.completed)for(let attempt=0;attempt<12;attempt++){
      // Operation status is a protected Disk API endpoint, not a public transfer URL.
-     const status=await disk('GET','/operations/'+match[1]);
+     const status=await disk('GET','/operations/'+move.id);
      if(status?.status==='success')break;
      if(status?.status==='failed')throw Object.assign(Error('Не удалось заменить документ на Яндекс Диске'),{status:502});
      if(attempt===11)throw Object.assign(Error('Сохранение ещё выполняется. Не закрывайте документ.'),{status:503});
