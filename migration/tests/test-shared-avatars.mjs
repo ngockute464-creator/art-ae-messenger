@@ -19,7 +19,7 @@ assert.ok(!client.includes('AVATAR_ADOPTED_KEY'),'No per-device migration flag r
 assert.ok(client.includes("response.status===304"),'Not-modified response avoids image downloads');
 assert.ok(client.includes("If-None-Match"),'Browser sends conditional requests');
 assert.ok(api.includes("createHash('sha256')"),'ETag comes from complete avatar roster');
-assert.ok(client.includes('JSON.stringify([...sharedAvatars])!==before'),'No needless rerender');
+assert.ok(client.includes('JSON.stringify([...sharedAvatars])!==previous'),'No needless rerender');
 assert.ok(sql.includes('ADD COLUMN IF NOT EXISTS avatar text'));
 assert.ok(sql.includes('CHECK(avatar IS NULL'));
 assert.ok(deploy.includes('pg_dump --format=custom'));
