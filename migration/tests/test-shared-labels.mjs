@@ -31,6 +31,7 @@ const rows=new Map();
 const query=async (sql,params=[])=>{
  if(sql.includes('FROM public.artae_projects'))return {rows:params[0]===project?[{id:project}]:[]};
  if(sql.includes('FROM public.artae_messages m JOIN'))return {rows:params[0]===message&&params[1]===project?[{id:message}]:[]};
+ if(sql.startsWith('SELECT c.project_id FROM public.artae_messages'))return {rows:params[0]===message?[{project_id:project}]:[]};
  if(sql.startsWith('SELECT item_kind AS kind,'))return {rows:[...rows.values()].filter(r=>r.project===params[0]).map(r=>({kind:r.kind,item:r.item,name:r.name}))};
  if(sql.startsWith('DELETE FROM public.artae_labels')){
   for(const [key,r]of rows)if(r.project===params[0]&&r.kind===params[1]&&r.item===params[2])rows.delete(key);
@@ -53,7 +54,11 @@ const call=async (action,extra={})=>{
  });
  const response=await handler(req);return {status:response.status,body:await response.json()};
 };
-let r=await call('merge',{labels:[{kind:'message',item:message,names:['Срочно','Проверить']}]});
+let r=await call('importLegacy',{labels:[{kind:'message',item:message,names:['Срочно','Проверить']},{kind:'message',item:other,names:['Чужая']}]});
+assert.equal(r.status,200,'Legacy import must succeed without a client-side project lookup');
+assert.equal(r.body.imported.length,1,'Missing/foreign messages must not be imported');
+assert.equal(r.body.imported[0].project,project,'Server resolves original project');
+r=await call('merge',{labels:[{kind:'message',item:message,names:['Срочно','Проверить']}]});
 assert.equal(r.status,200);
 r=await call('merge',{labels:[{kind:'message',item:message,names:['Срочно']}]});
 assert.equal(r.status,200);
