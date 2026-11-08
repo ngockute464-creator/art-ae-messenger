@@ -24,7 +24,7 @@ const MAX_BODY=4*1024*1024;
 const PREFIX='/.netlify/functions/';
 const realtimeDisabled=()=>Response.json({enabled:false,error:'Local Realtime not yet enabled'},{status:503,headers:noCache});
 const handlers=new Map([
-  ['auth',auth],['sync',sync],['pins',pins],
+  ['auth',auth],['sync',sync],['pins',pins],['labels',labels],
   ['files-explorer',filesExplorer],['voice',voice],['voice-transcript',voiceTranscript],
   ['realtime-token',realtimeDisabled],['push',push]
 ]);
