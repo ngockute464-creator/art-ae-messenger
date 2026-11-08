@@ -55,10 +55,10 @@ replace("<button type=\"submit\" class=\"btn primary\">Сохранить</butto
 replace("if(action==='filesHome')openExplorer();","if(action==='trashProject')trashProject(id);else if(action==='restoreProjects')restoreProjectPicker();else if(action==='filesHome')openExplorer();","project archive handlers");
 replace("if(action==='trashProject')trashProject(id);","if(action==='retrySend'){retryOutgoing(id);return}else if(action==='trashProject')trashProject(id);",'retry outgoing action');
 
-replace("data.pins=preferences.pins||[];data.labels=preferences.labels||[];","data.pins=[];data.labels=preferences.labels||[];",'ux patch 1');
+replace("data.pins=preferences.pins||[];data.labels=preferences.labels||[];","data.pins=[];data.labels=[];",'ux patch 1');
 replace("function labelList(kind,item){return data.labels.filter(l=>l.kind===kind&&l.item===item)}",
-        "function labelList(kind,item){return data.labels.filter(l=>l.kind===kind&&l.item===item&&(!l.project||l.project===project))}",'project scoped labels');
-replace("profile:data.profile,pins:data.pins,labels:data.labels","profile:data.profile,labels:data.labels",'ux patch 2');
+        "function labelList(kind,item){return data.labels.filter(l=>l.kind===kind&&l.item===item&&l.project===project)}",'project scoped labels');
+replace("profile:data.profile,pins:data.pins,labels:data.labels","profile:data.profile",'ux patch 2');
 replace("async function beginSync(){try{await syncOverview();syncReady=true;","async function beginSync(){try{await syncOverview();restoreWorkplace();await refreshPins();queueMicrotask(()=>refreshRailFiles());syncReady=true;",'ux patch 3');
 replace("📌 Закреплено</button>","📌 <span class=\"pinLabel\">Закреплено</span></button>",'ux patch 4');
 replace("${backButton}${pinButton}<div class=\"profileMenuWrap\">","${backButton}${pinButton}<button type=\"button\" class=\"btn small headerNav mobileFilesTop\" data-act=\"filesHome\" title=\"Файлы проекта\" aria-label=\"Файлы проекта\">📁</button><div class=\"profileMenuWrap\">",'ux patch 5');
