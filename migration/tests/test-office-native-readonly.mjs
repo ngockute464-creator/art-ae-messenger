@@ -63,6 +63,9 @@ const q=mockEnv('quire'),oldTx=q.api.D.tx,oldExec=q.api.ui.exec;
 // Quire's pinned model is exposed as L.D, not L.doc.
 assert.match(quireModel,/const D = \(L\.D = \{\}\)/);
 assert.match(src,/guard\(L\.D,'tx',false\)/);
+assert.match(src,/Quire read-only API unavailable: /);
+assert.match(readFileSync('server/office-client.js','utf8'),/\?build='/);
+assert.match(readFileSync('server/office-patch.mjs','utf8'),/artae-readonly\.js\?build=/);
 assert.doesNotMatch(src,/L\.doc/);
 q.ro.activate('quire');
 assert.equal(q.ro.active,true);
@@ -143,5 +146,5 @@ for(const p of ['server/office-client.js','office-site/integration/office-client
  assert.doesNotMatch(client,/if\(ctx\.mode==='preview'\)\{state\.textContent='Создаём PDF…'/);
  assert.match(client,/mode==='edit'&&!localFile/,'Edit still requires its lease');
 }
-assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.9-preview"/);
+assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.10-preview"/);
 console.log('OFFICE_NATIVE_READONLY_OK quire=true ledger=true search=true sheet_navigation=true restores=true no_auto_pdf=true');
