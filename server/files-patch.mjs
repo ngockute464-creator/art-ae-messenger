@@ -132,7 +132,7 @@ replace("if(btn){e.preventDefault();openMenu=btn.dataset.menu;render()}",
         'touch context menu opens without rerender');
 // Existing modal label edits must use the authenticated, shared API.
 replace("data.labels=data.labels.filter(l=>!(l.kind===m.kind&&l.item===m.id));for(const name of [...new Set(val.split(',').map(x=>x.trim()).filter(Boolean))].slice(0,12))data.labels.push({kind:m.kind,item:m.id,name:name.slice(0,40)});persist();",
-        "await saveSharedLabels(m.kind,m.id,val);",'shared label save');
+        "await saveSharedLabels(m.kind,m.id,val,m.value);",'shared label save');
 replace("function messageView(m){let fs=","function messageView(m){const authorAvatar=messageAuthorAvatar(m);let fs=","shared author avatar lookup");
 replace("${isMine(m)&&data.profile.avatar?`<img class=\"avatar\" src=\"${esc(data.profile.avatar)}\" alt=\"\">`:`<span class=\"avatar\">","${authorAvatar?`<img class=\"avatar\" src=\"${esc(authorAvatar)}\" alt=\"\">`:`<span class=\"avatar\">","shared avatar for all authors");
 replace("if(!val)return alert('Введите ник');data.profile={nickname:val,avatar:m.avatar||null};persist();","if(!val)return alert('Введите ник');await saveOwnAvatar(m.avatar||null);data.profile={nickname:val,avatar:m.avatar||null};persist();","sync profile photo on save");
