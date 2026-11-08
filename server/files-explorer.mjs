@@ -274,7 +274,7 @@ export default async function handler(request){
    return response({...lease,editToken:lease.ok&&action==='acquire'?leaseToken:undefined},lease.ok?200:423);
   }
   if(args.action==='officeVersion'&&request.method==='GET'){
-   if(!rel||!/\.(docx|xlsx)$/i.test(rel))throw Object.assign(Error('Недопустимый документ'),{status:400});
+   if(!rel||!/\.(docx|xlsx|xlsm)$/i.test(rel))throw Object.assign(Error('Недопустимый документ'),{status:400});
    const info=await disk('GET','/resources',{path:apiPath(p.folder_path,rel),fields:'type,modified,size,name'});
    if(info.type!=='file'||typeof info.modified!=='string'||!info.modified)throw Object.assign(Error('Документ недоступен'),{status:404});
    return response({modified:info.modified,size:info.size});
