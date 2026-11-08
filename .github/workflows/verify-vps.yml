@@ -40,7 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const fs=require('fs');const s=fs.readFileSync('public/app.js','utf8');for(const term of ['function mark(','function editLabels','function messageView(']){const i=s.indexOf(term);console.log('UI_INSPECT_3',term,i,i>=0?s.slice(i,i+2400):'')}"
+          node -e "const s=require('fs').readFileSync('public/app.js','utf8');for(const term of ['function labelList(','function editLabels(','data.labels.push(','data.labels=','function mark(','if(action===\x27editLabels\x27)']){let i=s.indexOf(term);console.log('LABEL_MODEL',term,i,i>=0?s.slice(Math.max(0,i-250),i+1200):'')}"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
