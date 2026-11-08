@@ -73,6 +73,7 @@ jobs:
           node migration/tests/test-office-xlsm-preview.mjs
           node migration/tests/test-pinned-navigation.mjs
           node migration/tests/test-shared-labels.mjs
+          node migration/tests/test-label-project-switch.mjs
           node migration/tests/test-shared-avatars.mjs
           node --check migration/runtime/avatars.mjs
           test -s migration/sql/008_shared_avatars.sql
@@ -91,6 +92,7 @@ jobs:
           node migration/tests/test-viewer-keyboard-focus.mjs
           node --check migration/runtime/chat-attachment-cleanup.mjs
           node --test tests/e12-composer.test.mjs tests/e9-voice.test.mjs
+          node --test tests/e7-file-ui.test.mjs tests/e8-file-actions-typography.test.mjs tests/e9-voice-autoplay.test.mjs tests/e14-office-inplace-save.test.mjs tests/e15-exclusive-office-and-message-edit.test.mjs tests/e16-chat-files.test.mjs
           node --check server/unread-client.js
           node --check server/unread-patch.mjs
           node --check migration/runtime/unread.mjs
@@ -135,7 +137,7 @@ jobs:
 
 
   verify-unread-postgres:
-    if: github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files' || github.ref == 'refs/heads/fix/viewer-focus-chat-attachment-deletion' || github.ref == 'refs/heads/feature/office-native-readonly-preview'
+    if: github.ref == 'refs/heads/netlify-preview' || github.ref == 'refs/heads/feature/message-counts-read' || github.ref == 'refs/heads/feature/web-push' || github.ref == 'refs/heads/feature/message-erasure-unlimited-files' || github.ref == 'refs/heads/fix/viewer-focus-chat-attachment-deletion' || github.ref == 'refs/heads/feature/office-native-readonly-preview'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:
