@@ -78,8 +78,12 @@ function activate(next){
  if(!L?.app||!L?.ui)throw Error('VibeOffice has not initialized');
  try{
   if(next==='quire'){
-   if(typeof L.app.setView!=='function'||!L.ed||!L.D||!L.layout?.root)
-    throw Error('Quire read-only API unavailable');
+   const missing=[
+    ['app.setView',typeof L.app.setView==='function'],
+    ['ed',!!L.ed],['D.tx',typeof L.D?.tx==='function'],
+    ['layout.root',!!L.layout?.root]
+   ].filter(([,ok])=>!ok).map(([name])=>name);
+   if(missing.length)throw Error('Quire read-only API unavailable: '+missing.join(', '));
    const previousView=L.app.view;
    L.app.setView('reading');
    undo.push(()=>{if(L.app.view!==previousView)L.app.setView(previousView||'print')});
