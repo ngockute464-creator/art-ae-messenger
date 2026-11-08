@@ -326,7 +326,7 @@ function explorerZoomableImage(media,body,bar){
 }
 
 async function explorerPreview(path,name,mime,chatSource=null,opener=null){
- if(/\.(docx|xlsx)$/i.test(name)){
+ if(/\.(docx|xlsx|xlsm)$/i.test(name)){
   if(typeof window.ARTAE_OFFICE_PREVIEW!=='function'){
    alert('Office-просмотр не загрузился. Обновите страницу и попробуйте снова.');
    return;
@@ -460,7 +460,7 @@ function explorerFileTypeIcon(name,mime=''){
  }else if(['doc','docx','odt','rtf'].includes(ext)){
   type='word';label='Документ Word';
   paths=page+'<path d="m8 12 1.3 5 1.7-3 1.7 3L14 12"/>';
- }else if(['xls','xlsx','ods'].includes(ext)){
+ }else if(['xls','xlsx','xlsm','ods'].includes(ext)){
   type='excel';label='Таблица Excel';
   paths=page+'<path d="m8 12 5 5m0-5-5 5"/>';
  }else if(ext==='pdf'){
