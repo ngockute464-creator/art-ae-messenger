@@ -10,7 +10,7 @@ assert.match(renderer,/window\.ARTAE_PDF_RENDER=explorerPdfDocumentViewer/);
 assert.match(app,/window\.ARTAE_PDF_RENDER=explorerPdfDocumentViewer/);
 assert.match(app,/artaeOfficePdfHost/);
 assert.match(explorer,/window\.ARTAE_OFFICE_PREVIEW\(path,name,explorer\.project\|\|project\)/);
-assert.match(version,/"version":"0\.4\.17-preview"/);
+assert.match(version,/"version":"0\.4\.18-preview"/);
 
 for(const path of ['server/office-client.js','office-site/integration/office-client.js']){
  const code=readFileSync(path,'utf8');
