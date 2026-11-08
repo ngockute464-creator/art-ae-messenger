@@ -129,11 +129,13 @@ function finishDocxClose(ctx){
  if(!warmXlsx)setTimeout(()=>{try{prewarmOfficeXlsx()}catch(error){console.warn('XLSX warm-up:',error)}},1000);
 }
 async function openProjectDocument(path,name,projectId,localFile=null,mode='edit'){
+ if(/\.xlsm$/i.test(name)&&mode!=='preview')return;
  if(active){
   alert('Сначала закройте открытый документ, затем повторите просмотр.');
   return;
  }
- if(!/\.(docx|xlsx)$/i.test(name))return;
+ if(!/\.(docx|xlsx|xlsm)$/i.test(name))return;
+ // Macro-enabled workbooks are for display only; no editing or lease.
  if(!localFile&&!projectId){alert('Не удалось определить проект файла. Обновите список файлов.');return;}
  // Atomically lock before initializing the editor, including Office prewarm reuse.
  let acquired=null;
