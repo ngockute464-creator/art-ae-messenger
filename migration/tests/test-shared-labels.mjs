@@ -30,8 +30,8 @@ const user='44444444-4444-4444-8444-444444444444';
 const rows=new Map();
 const query=async (sql,params=[])=>{
  if(sql.includes('FROM public.artae_projects'))return {rows:params[0]===project?[{id:project}]:[]};
- if(sql.includes('FROM public.artae_messages m JOIN'))return {rows:params[0]===message&&params[1]===project?[{id:message}]:[]};
  if(sql.startsWith('SELECT c.project_id FROM public.artae_messages'))return {rows:params[0]===message?[{project_id:project}]:[]};
+ if(sql.includes('FROM public.artae_messages m JOIN'))return {rows:params[0]===message&&params[1]===project?[{id:message}]:[]};
  if(sql.startsWith('SELECT item_kind AS kind,'))return {rows:[...rows.values()].filter(r=>r.project===params[0]).map(r=>({kind:r.kind,item:r.item,name:r.name}))};
  if(sql.startsWith('DELETE FROM public.artae_labels')){
   for(const [key,r]of rows)if(r.project===params[0]&&r.kind===params[1]&&r.item===params[2])rows.delete(key);
