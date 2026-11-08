@@ -9,6 +9,7 @@ const replace=(oldText,newText,label)=>{
 const client=readFileSync('server/files-client.js','utf8');
 const resizeClient=readFileSync('server/layout-resize.js','utf8');
 const uxClient=readFileSync('server/ux-client.js','utf8');
+const labelsClient=readFileSync('server/labels-client.js','utf8');
 const mentionsClient=readFileSync('server/file-mentions.js','utf8');
 const officeClient=readFileSync('server/office-client.js','utf8');
 const reliableSend=readFileSync('server/reliable-send.js','utf8');
@@ -20,7 +21,7 @@ const chatMediaClient=readFileSync('server/chat-media-client.js','utf8');
 const pdfViewerClient=readFileSync('server/pdf-viewer-client.js','utf8');
 const messageMenuClient=readFileSync('server/message-menu-client.js','utf8');
 const focusGuardClient=readFileSync('server/composer-focus-guard.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+chatMediaClient+'\n'+pdfViewerClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\nfunction cp(){','client and resize functions');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+labelsClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+chatMediaClient+'\n'+pdfViewerClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -126,6 +127,9 @@ replace("holdTimer=setTimeout(()=>{openMenu=key;holdTriggered=true;render()},550
 replace("if(btn){e.preventDefault();openMenu=btn.dataset.menu;render()}",
         "if(btn){e.preventDefault();toggleMessageMenuDom(btn)}",
         'touch context menu opens without rerender');
+// Existing modal label edits must use the authenticated, shared API.
+replace("data.labels=data.labels.filter(l=>!(l.kind===m.kind&&l.item===m.id));for(const name of [...new Set(val.split(',').map(x=>x.trim()).filter(Boolean))].slice(0,12))data.labels.push({kind:m.kind,item:m.id,name:name.slice(0,40)});persist();",
+        "await saveSharedLabels(m.kind,m.id,val);",'shared label save');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
