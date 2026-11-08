@@ -87,13 +87,14 @@ function activate(next){
    const previousView=L.app.view;
    L.app.setView('reading');
    undo.push(()=>{if(L.app.view!==previousView)L.app.setView(previousView||'print')});
-   // The built-in reading mode defaults to two pages: one page on Android.
-   if(window.matchMedia?.('(max-width: 700px)').matches&&
-      typeof L.layout.setMultiPage==='function'){
-    L.layout.setMultiPage(0);
-    if(typeof L.layout.zoomFor==='function'&&typeof L.layout.setZoom==='function')
-     L.layout.setZoom(L.layout.zoomFor('pageWidth'));
-   }
+   // Quire defaults to a two-page spread in Reading mode.
+   // Use one vertically scrolling page at page-width zoom on every screen.
+   if(typeof L.layout.setMultiPage!=='function'||
+      typeof L.layout.zoomFor!=='function'||
+      typeof L.layout.setZoom!=='function')
+    throw Error('Quire single-page layout API unavailable');
+   L.layout.setMultiPage(0);
+   L.layout.setZoom(L.layout.zoomFor('pageWidth'));
    property(L.ed,'readOnly',true);
    property(L.layout.root,'contentEditable','false');
    guard(L.D,'tx',false);
