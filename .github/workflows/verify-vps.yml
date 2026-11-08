@@ -71,6 +71,7 @@ jobs:
           node migration/tests/test-office-pdfjs-inline.mjs
           node migration/tests/test-office-native-readonly.mjs
           node migration/tests/test-office-xlsm-preview.mjs
+          node migration/tests/test-pinned-navigation.mjs
           node migration/tests/test-office-save-move-link.mjs
           test -s public/office/artae-readonly.js
           node --check public/office/artae-readonly.js
