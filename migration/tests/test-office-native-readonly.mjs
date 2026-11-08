@@ -191,5 +191,5 @@ for(const p of ['server/office-client.js','office-site/integration/office-client
  assert.doesNotMatch(client,/if\(ctx\.mode==='preview'\)\{state\.textContent='Создаём PDF…'/);
  assert.match(client,/mode==='edit'&&!localFile/,'Edit still requires its lease');
 }
-assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.19-preview"/);
+assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.20-preview"/);
 console.log('OFFICE_NATIVE_READONLY_OK quire=true ledger=true search=true sheet_navigation=true restores=true no_auto_pdf=true');
