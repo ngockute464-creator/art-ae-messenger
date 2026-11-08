@@ -390,4 +390,18 @@ css+='\n'+String.raw`
  .artaePdfSheetLabel{margin-left:3px}
 }
 `;
+// Pinned files use their own resource card; slightly stronger outlines for
+// both message and file pins. Works on mobile without showing a message menu.
+css+=`
+.pin-card,.artaePinnedFileCard{border:2px solid #cbd5e2;border-radius:12px;box-sizing:border-box}
+.artaePinnedFileCard{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:12px;margin:8px 0;background:var(--surface,#fff)}
+.artaePinnedFileOpen{min-width:0;flex:1;display:flex;align-items:center;gap:10px;text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+.artaePinnedFileOpen .projectFileTypeIcon,.railPinnedItem .projectFileTypeIcon{flex:none;display:inline-flex;align-items:center;vertical-align:middle;margin-right:7px}
+.artaePinnedFileOpen .projectFileTypeIcon{margin-right:0}
+.artaePinnedFileName{min-width:0;overflow-wrap:anywhere;font-weight:600}
+.artaePinnedFileRemove{border:0;background:none;color:var(--muted,#718096);font-size:23px;line-height:1;padding:5px 8px;cursor:pointer;flex:none}
+.artaePinnedFileRemove:hover,.artaePinnedFileRemove:focus-visible{color:#b33333}
+.artaePinnedFileNote{flex-basis:100%;font-size:12px;color:var(--muted,#718096);overflow-wrap:anywhere}
+@media(max-width:650px){.pin-card,.artaePinnedFileCard{border-width:2px}.artaePinnedFileCard{padding:12px 10px}}
+`;
 writeFileSync(cssFile,css);
