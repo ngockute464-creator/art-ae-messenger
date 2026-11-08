@@ -22,7 +22,10 @@ try{
  if(!print.includes(pdfAnchor))throw Error('Pinned Ledger PDF export has changed');
  print=print.replace(pdfAnchor,'      ui.busy(false);\n      if (opts.returnBlob) return pdf;\n      const name = (A.books[A.cur]');
  writeFileSync(printPath,print);
- const bridge='<script src="../artae-readonly.js" defer></script>\n<script src="../artae-bridge.js" defer></script>';
+ const releaseSha=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+ if(!/^[a-f0-9]{40}$/.test(releaseSha))throw Error('Office release commit missing');
+ const release=releaseSha.slice(0,12);
+ const bridge='<script src="../artae-readonly.js?build='+release+'" defer></script>\n<script src="../artae-bridge.js?build='+release+'" defer></script>';
  for(const kind of ['quire','ledger']){
   const page='public/office/'+kind+'/index.html';
   let html=readFileSync(page,'utf8');
