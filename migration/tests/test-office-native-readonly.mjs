@@ -53,7 +53,7 @@ function mockEnv(which){
   api.editor={begin(){mutations++;return true}};
   api.app.activateSheet=function(i){calls.push('sheet:'+i)};
  }
- const box={window:{L:api,matchMedia:()=>({matches:true})},document:doc,console};
+ const box={window:{L:api,matchMedia:()=>({matches:false})},document:doc,console};
  runInNewContext(src,box,{filename:'artae-readonly.js'});
  const ro=box.window.ARTAE_OFFICE_READONLY;
  assert.ok(ro&&typeof ro.activate==='function');
@@ -77,7 +77,8 @@ assert.equal(q.api.saveFile('a.docx'),undefined);
 assert.equal(q.api.ui.exec('save'),false);
 assert.equal(q.api.ui.exec('find'),true);
 assert.equal(q.doc.documentElement.dataset.artaeOfficeViewer,'1');
-assert.ok(calls.includes('multi:0'),'Android must disable two-page reading layout');
+assert.ok(calls.includes('multi:0'),'Reading must disable two-page spread on all screens');
+assert.ok(calls.includes('zoom:0.9'),'Reading must fit one page to viewer width');
 const checkKeyboard=(env,type,key,tag='DIV',id='',ctrl=false)=>{
  let prevented=false,stopped=false;
  const e={type,key,ctrlKey:ctrl,metaKey:false,altKey:false,
@@ -146,5 +147,5 @@ for(const p of ['server/office-client.js','office-site/integration/office-client
  assert.doesNotMatch(client,/if\(ctx\.mode==='preview'\)\{state\.textContent='Создаём PDF…'/);
  assert.match(client,/mode==='edit'&&!localFile/,'Edit still requires its lease');
 }
-assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.10-preview"/);
+assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.11-preview"/);
 console.log('OFFICE_NATIVE_READONLY_OK quire=true ledger=true search=true sheet_navigation=true restores=true no_auto_pdf=true');
