@@ -32,6 +32,7 @@ async function refreshSharedAvatars(force=false){
   });
   let result={};try{result=await response.json()}catch{}
   if(!response.ok||!Array.isArray(result.avatars))throw Error(result.error||'Не удалось получить аватары');
+  const before=JSON.stringify([...sharedAvatars]);
   sharedAvatars.clear();
   for(const entry of result.avatars){
    if(typeof entry.id==='string')sharedAvatars.set(entry.id,avatarSafe(entry.avatar)?entry.avatar:null);
@@ -53,7 +54,7 @@ async function refreshSharedAvatars(force=false){
    persist();
   }
   avatarsLastFetch=Date.now();
-  if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
+  if(JSON.stringify([...sharedAvatars])!==before&&!modal&&!editing&&document.activeElement?.id!=='draft')render();
  }catch(error){console.warn('Shared avatars:',error.message)}
  finally{avatarsLoading=false}
 }
