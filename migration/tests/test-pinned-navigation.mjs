@@ -10,10 +10,18 @@ assert.ok(ux.includes("isFile?'jumpPinnedFile':'railJumpPin'"),'Rail file pins m
 assert.ok(patch.includes("if(action==='jumpPinnedFile'){jumpPinnedFile(el.dataset.path);return}"),'Delegated file pin action');
 assert.ok(ux.includes("const originalPinCard=pinCard"),'Full-screen pinned cards are decorated');
 assert.ok(ux.includes("view!=='pins'&&view!=='projectpins'"),'Pin click listener stays scoped to pin views');
-assert.ok(ux.includes("['goMessage','goFile','filesPreview','railJumpPin']"),'Pinned card primary actions navigate');
+assert.ok(ux.includes("['goMessage','goFile','filesPreview','railJumpPin','jumpPinnedFile']"),'Pinned card primary actions navigate');
 assert.ok(ux.includes("event.stopImmediatePropagation()"),'Navigation must not trigger old preview actions');
 assert.ok(ux.includes("if(control&& !"),'Pin management controls must be left alone');
 assert.ok(files.includes("function openExplorer(path='')"),'Use the existing project file explorer');
+assert.ok(ux.includes("if(p.kind==='file'){"),'Pinned file has a separate card');
+assert.ok(ux.includes('explorerFileTypeIcon(name)'),'Pinned file uses explorer SVG icons');
+assert.ok(ux.includes('artaePinnedFileCard'),'Pinned file does not imitate a chat message');
+assert.ok(ux.includes('artaePinnedFileRemove'),'Pinned file has direct unpin control');
+assert.ok(!ux.includes("'📄 ':'📌 '"),'Rail file pins no longer use emoji file icons');
+const patch=readFileSync('server/files-patch.mjs','utf8');
+assert.ok(patch.includes('.pin-card,.artaePinnedFileCard{border:2px'),'Pinned cards use thicker borders');
+
 
 const between=(start,end)=>{const i=ux.indexOf(start);assert.ok(i>=0,start);const j=ux.indexOf(end,i+start.length);assert.ok(j>i,end);return ux.slice(i,j)};
 const fileCode=between('function jumpPinnedFile(path){','// Make existing pinned cards');
