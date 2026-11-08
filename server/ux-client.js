@@ -43,6 +43,7 @@ function restoreWorkplace(){
  if(view==='pins'&&!convo)view='conversations';
  if(view==='files')queueMicrotask(()=>{if(view==='files')explorerLoad(s.path||'')});
  if(view==='chat'&&convo)queueMicrotask(()=>{syncMessages(true);connectRealtime(convo)});
+ if(project)queueMicrotask(()=>refreshSharedLabels(true));
 }
 async function pinsRequest(action,params={},get=false){
  const base='/.netlify/functions/pins';
@@ -220,10 +221,11 @@ root.addEventListener('scroll',e=>{
  if(e.target?.classList?.contains('explorerPane'))saveWorkplace();
 },true);
 window.addEventListener('pagehide',saveWorkplace);
+setInterval(()=>{if(project&&!document.hidden)void refreshSharedLabels()},15000);
 let lastRailProject=null;
 root.addEventListener('click',()=>queueMicrotask(()=>{
  saveWorkplace();
- if(project!==lastRailProject){lastRailProject=project;railProject=null;pinsVersion='';data.pins=[];refreshPins();}
+ if(project!==lastRailProject){lastRailProject=project;railProject=null;pinsVersion='';data.pins=[];refreshPins();refreshSharedLabels(true);}
  if(project&&explorer.project!==project)refreshRailFiles();
 }));
 root.addEventListener('pointerdown',e=>{
