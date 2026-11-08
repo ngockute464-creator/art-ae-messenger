@@ -45,7 +45,7 @@ function mockEnv(which){
  };
  if(which==='quire'){
   api.ed={readOnly:false,focus(){calls.push('quire:focus')},refocus(){calls.push('quire:refocus')}};
-  const root={contentEditable:'true',blur(){calls.push('quire:blur');doc.activeElement=null}};
+  const root={contentEditable:'true',contains(node){return !!node?.inQuire},blur(){calls.push('quire:blur');doc.activeElement=null}};
   doc.activeElement=root;
   api.layout={root,setMultiPage(n){calls.push('multi:'+n)},
    zoomFor(x){return x==='pageWidth'?0.9:1},setZoom(z){calls.push('zoom:'+z)}};
@@ -79,6 +79,21 @@ assert.ok(calls.includes('quire:blur'),'Active Quire editing surface must blur')
 const quireFocusCalls=calls.length;
 q.api.ed.focus();q.api.ed.refocus();
 assert.equal(calls.length,quireFocusCalls,'Read-only Quire must not auto focus or refocus');
+// A mobile double tap must not reach Quire's editing handlers, but may still
+// select text natively (do not call preventDefault).
+const mobileText={inQuire:true,blur(){calls.push('native:blur')}};
+let stopped=false,prevented=false;
+for(const fn of q.listeners.dblclick||[])fn({
+ target:mobileText,stopImmediatePropagation(){stopped=true},
+ preventDefault(){prevented=true}
+});
+assert.equal(stopped,true,'Double tap is intercepted before Quire');
+assert.equal(prevented,false,'Native selection is preserved');
+for(const fn of q.listeners.focusin||[])fn({target:mobileText});
+assert.ok(calls.includes('native:blur'),'Browser-initiated focus is released');
+const beforeFindFocus=calls.length;
+for(const fn of q.listeners.focusin||[])fn({target:{tagName:'INPUT',id:'find-term',blur(){calls.push('find:blur')}}});
+assert.equal(calls.length,beforeFindFocus,'Search input must retain focus');
 assert.equal(q.api.app.view,'reading');
 assert.equal(q.api.ed.readOnly,true);
 assert.equal(q.api.layout.root.contentEditable,'false');
@@ -104,6 +119,14 @@ assert.deepEqual(checkKeyboard(q,'beforeinput','', 'INPUT','find-term'),{prevent
  'Typing into Find must still work');
 assert.deepEqual(checkKeyboard(q,'beforeinput','', 'DIV','pages'),{prevented:true,stopped:true});
 q.ro.release();
+let afterReleaseStopped=false;
+for(const fn of q.listeners.dblclick||[])fn({
+ target:mobileText,stopImmediatePropagation(){afterReleaseStopped=true}
+});
+assert.equal(afterReleaseStopped,false,'Normal edit mode keeps double click');
+const afterReleaseFocus=calls.length;
+for(const fn of q.listeners.focusin||[])fn({target:mobileText});
+assert.equal(calls.length,afterReleaseFocus,'Normal edit mode is not blurred');
 assert.equal(q.ro.active,false);
 assert.equal(q.api.D.tx,oldTx);
 assert.equal(q.api.ui.exec,oldExec);
@@ -168,5 +191,5 @@ for(const p of ['server/office-client.js','office-site/integration/office-client
  assert.doesNotMatch(client,/if\(ctx\.mode==='preview'\)\{state\.textContent='Создаём PDF…'/);
  assert.match(client,/mode==='edit'&&!localFile/,'Edit still requires its lease');
 }
-assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.12-preview"/);
+assert.match(readFileSync('public/app-version.json','utf8'),/"version":"0\.4\.13-preview"/);
 console.log('OFFICE_NATIVE_READONLY_OK quire=true ledger=true search=true sheet_navigation=true restores=true no_auto_pdf=true');
