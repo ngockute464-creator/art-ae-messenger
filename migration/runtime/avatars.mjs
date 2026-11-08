@@ -1,6 +1,7 @@
 // Authenticated roster and self-only avatar update. PostgreSQL is authoritative.
 import {getSession} from './auth.mjs';
 import {query} from './postgres.mjs';
+import {createHash} from 'node:crypto';
 const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'};
 const reply=(data,status=200)=>Response.json(data,{status,headers});
 const sameOrigin=req=>{try{return new URL(req.headers.get('origin')).origin===new URL(req.url).origin}catch{return false}};
@@ -14,17 +15,19 @@ export default async function handler(req){
   if(!session)return reply({error:'Требуется вход'},401);
   if(req.method==='GET'){
    const {rows}=await query('SELECT id,avatar FROM public.artae_users WHERE disabled=false ORDER BY id');
-   return reply({avatars:rows.map(row=>({id:row.id,avatar:row.avatar||null}))});
+   const avatars=rows.map(row=>({id:row.id,avatar:row.avatar||null}));
+   const etag='"'+createHash('sha256').update(JSON.stringify(avatars)).digest('hex')+'"';
+   if(req.headers.get('if-none-match')===etag)
+    return new Response(null,{status:304,headers:{...headers,ETag:etag}});
+   return Response.json({avatars},{headers:{...headers,ETag:etag}});
   }
   let body;try{body=await req.json()}catch{return reply({error:'Неправильный JSON'},400)}
   if(!body||typeof body!=='object'||Array.isArray(body)||!avatarOk(body.avatar)||!Object.hasOwn(body,'avatar'))
    return reply({error:'Недопустимый аватар'},400);
-  if(body.action!=='set'&&body.action!=='migrate')return reply({error:'Неизвестная операция'},404);
-  // Legacy avatar adoption can only fill an empty slot, never overwrite another device.
-  const sql=body.action==='migrate'
-   ?'UPDATE public.artae_users SET avatar=$2 WHERE id=$1 AND avatar IS NULL RETURNING avatar'
-   :'UPDATE public.artae_users SET avatar=$2 WHERE id=$1 RETURNING avatar';
-  const {rows:[changed]}=await query(sql,[session.user.id,body.avatar]);
+  if(body.action!=='set')return reply({error:'Неизвестная операция'},404);
+  const {rows:[changed]}=await query(
+   'UPDATE public.artae_users SET avatar=$2 WHERE id=$1 RETURNING avatar',
+   [session.user.id,body.avatar]);
   if(changed)return reply({ok:true,avatar:changed.avatar});
   const {rows:[existing]}=await query('SELECT avatar FROM public.artae_users WHERE id=$1',[session.user.id]);
   if(!existing)return reply({error:'Пользователь не найден'},404);
