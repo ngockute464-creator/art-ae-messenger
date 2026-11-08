@@ -118,7 +118,7 @@ function railFileVisible(){
 function railPinRows(scope){
  return railPins(scope).map(p=>{
   const isFile=p.kind==='file',title=p.previewText||p.item;
-  const act=isFile?'filesPreview':'railJumpPin';
+  const act=isFile?'jumpPinnedFile':'railJumpPin';
   return '<div class="railPinRow"><button type="button" class="railPinnedItem" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'" title="'+(isFile?'Открыть файл':'Перейти к сообщению')+'">'+(isFile?'📄 ':'📌 ')+esc(pinTextSummary(title))+'</button><button type="button" class="railMini" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить" aria-label="Открепить">×</button></div>';
  }).join('');
 }
@@ -139,11 +139,66 @@ function desktopRail(){
 }
 async function railJumpPin(item,targetConvo){
  if(!targetConvo)return alert('Исходный разговор недоступен');
- const c=data.convos.find(x=>x.id===targetConvo);if(!c)return alert('Разговор удалён');
- project=c.project;convo=c.id;view='chat';highlightId=item;render();saveWorkplace();
+ const c=data.convos.find(x=>x.id===targetConvo);
+ if(!c||c.project!==project)return alert('Разговор недоступен');
+ const previous=convo;
+ if(previous!==c.id)stopRealtime();
+ convo=c.id;view='chat';highlightId=item;openMenu=null;
+ // A pinned message can predate the incremental sync cursor; load full history
+ // when it isn't in the local snapshot.
+ if(!data.messages.some(m=>m.id===item&&m.convo===c.id))lastMessageCursor[c.id]=0;
+ render();saveWorkplace();
  await syncMessages(true);
- if(convo===c.id){render();requestAnimationFrame(()=>document.getElementById(item)?.scrollIntoView({block:'center'}))}
+ if(convo!==c.id||view!=='chat')return;
+ connectRealtime(c.id);
+ render();
+ requestAnimationFrame(()=>{
+  const target=document.getElementById(item);
+  if(target)target.scrollIntoView({block:'center'});
+  else console.warn('Pinned message not found in loaded conversation',item);
+ });
 }
+function jumpPinnedFile(path){
+ if(typeof path!=='string'||!path||path.startsWith('/')||path.includes('\\')||path.includes('//'))
+  return alert('Недопустимый путь закреплённого файла');
+ const parts=path.split('/');
+ if(parts.some(x=>!x||x==='.'||x==='..'))return alert('Недопустимый путь закреплённого файла');
+ const folder=parts.slice(0,-1).join('/');
+ openExplorer(folder);
+ // The file explorer has its own async list renderer; locate the file only
+ // after the list returns. Missing files still leave the correct folder open.
+ const selectedProject=project;
+ const request=explorerRequest;
+ const reveal=()=>{
+  if(project!==selectedProject||explorerRequest!==request||explorer.path!==folder)return;
+  if(explorer.loading){setTimeout(reveal,80);return}
+  const file=[...root.querySelectorAll('[data-act="filesPreview"][data-path]')]
+   .find(node=>node.dataset.path===path);
+  file?.scrollIntoView({block:'center'});
+ };
+ setTimeout(reveal,0);
+}
+// Make existing pinned cards navigable without modifying remove/note buttons.
+// The main content of a pin jumps to its origin; explicit pin management stays intact.
+const originalPinCard=pinCard;
+pinCard=function(p){
+ const html=originalPinCard(p);
+ if(typeof html!=='string')return html;
+ const attrs=' data-artae-pin-kind="'+esc(p.kind)+'" data-artae-pin-item="'+esc(p.item)+'" data-artae-pin-convo="'+esc(p.convoId||'')+'"';
+ return html.replace(/<([a-z][a-z0-9-]*)\b/i,match=>match+attrs);
+};
+root.addEventListener('click',event=>{
+ if(view!=='pins'&&view!=='projectpins')return;
+ const pinElement=event.target.closest('[data-artae-pin-kind]');
+ if(!pinElement)return;
+ const control=event.target.closest('button,a,input,textarea,select,[contenteditable]');
+ const action=control?.dataset?.act||'';
+ // A pin's text is navigable; dedicated management actions are not.
+ if(control&& !['goMessage','goFile','filesPreview','railJumpPin'].includes(action))return;
+ event.preventDefault();event.stopImmediatePropagation();
+ if(pinElement.dataset.artaePinKind==='file')jumpPinnedFile(pinElement.dataset.artaePinItem);
+ else railJumpPin(pinElement.dataset.artaePinItem,pinElement.dataset.artaePinConvo);
+},true);
 root.addEventListener('scroll',e=>{
  if(e.target?.classList?.contains('explorerPane'))saveWorkplace();
 },true);
