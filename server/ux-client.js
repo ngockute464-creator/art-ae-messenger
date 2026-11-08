@@ -119,7 +119,7 @@ function railPinRows(scope){
  return railPins(scope).map(p=>{
   const isFile=p.kind==='file',title=p.previewText||p.item;
   const act=isFile?'jumpPinnedFile':'railJumpPin';
-  return '<div class="railPinRow"><button type="button" class="railPinnedItem" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'" title="'+(isFile?'Открыть файл':'Перейти к сообщению')+'">'+(isFile?'📄 ':'📌 ')+esc(pinTextSummary(title))+'</button><button type="button" class="railMini" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить" aria-label="Открепить">×</button></div>';
+  return '<div class="railPinRow"><button type="button" class="railPinnedItem" data-act="'+act+'" data-id="'+esc(p.item)+'" data-convo="'+esc(p.convoId||'')+'" data-path="'+esc(p.item)+'" data-name="'+esc(p.item.split('/').pop())+'" title="'+(isFile?'Перейти к файлу':'Перейти к сообщению')+'">'+(isFile?explorerFileTypeIcon(p.item.split('/').pop()):'📌 ')+esc(pinTextSummary(title))+'</button><button type="button" class="railMini" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить" aria-label="Открепить">×</button></div>';
  }).join('');
 }
 function desktopRail(){
@@ -187,9 +187,21 @@ function jumpPinnedFile(path){
 // The main content of a pin jumps to its origin; explicit pin management stays intact.
 const originalPinCard=pinCard;
 pinCard=function(p){
+ const attrs=' data-artae-pin-kind="'+esc(p.kind)+'" data-artae-pin-item="'+esc(p.item)+'" data-artae-pin-convo="'+esc(p.convoId||'')+'"';
+ if(p.kind==='file'){
+  // Files are project resources, not messages. Never render a missing sender,
+  // a deleted conversation, or the message three-dot menu.
+  const name=p.item.split('/').pop();
+  const icon=explorerFileTypeIcon(name);
+  const note=p.note?'<div class="artaePinnedFileNote">'+esc(p.note)+'</div>':'';
+  return '<article class="artaePinnedFileCard"'+attrs+'>'+
+   '<button type="button" class="artaePinnedFileOpen" data-act="jumpPinnedFile" data-path="'+esc(p.item)+'" title="Перейти к файлу">'+
+   icon+'<span class="artaePinnedFileName">'+esc(name)+'</span></button>'+
+   '<button type="button" class="artaePinnedFileRemove" data-act="removePin" data-id="'+esc(p.id)+'" title="Открепить файл" aria-label="Открепить файл">×</button>'+
+   note+'</article>';
+ }
  const html=originalPinCard(p);
  if(typeof html!=='string')return html;
- const attrs=' data-artae-pin-kind="'+esc(p.kind)+'" data-artae-pin-item="'+esc(p.item)+'" data-artae-pin-convo="'+esc(p.convoId||'')+'"';
  return html.replace(/<([a-z][a-z0-9-]*)\b/i,match=>match+attrs);
 };
 root.addEventListener('click',event=>{
@@ -199,7 +211,7 @@ root.addEventListener('click',event=>{
  const control=event.target.closest('button,a,input,textarea,select,[contenteditable]');
  const action=control?.dataset?.act||'';
  // A pin's text is navigable; dedicated management actions are not.
- if(control&& !['goMessage','goFile','filesPreview','railJumpPin'].includes(action))return;
+ if(control&& !['goMessage','goFile','filesPreview','railJumpPin','jumpPinnedFile'].includes(action))return;
  event.preventDefault();event.stopImmediatePropagation();
  if(pinElement.dataset.artaePinKind==='file')jumpPinnedFile(pinElement.dataset.artaePinItem);
  else railJumpPin(pinElement.dataset.artaePinItem,pinElement.dataset.artaePinConvo);
