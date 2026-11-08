@@ -50,12 +50,12 @@ async function refreshSharedLabels(force=false){
   }
  }
 }
-async function saveSharedLabels(kind,item,text){
+async function saveSharedLabels(kind,item,text,originalText){
  const target=labelOwner(kind,item)||project;
  if(!target)throw Error('Проект метки не определён');
  const names=[...new Set(String(text).split(',').map(n=>n.trim()).filter(Boolean))].slice(0,12);
  if(names.some(n=>n.length>40))throw Error('Метка длиннее 40 символов');
- const expectedNames=data.labels.filter(l=>l.project===target&&l.kind===kind&&l.item===item).map(l=>l.name);
+ const expectedNames=[...new Set(String(originalText??'').split(',').map(n=>n.trim()).filter(Boolean))];
  try{await labelsRequest('set',{project:target,kind,item,names,expectedNames})}
  catch(error){if(error.status===409)await refreshSharedLabels(true);throw error}
  data.labels=data.labels.filter(l=>!(l.project===target&&l.kind===kind&&l.item===item));
