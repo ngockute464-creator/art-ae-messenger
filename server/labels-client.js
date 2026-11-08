@@ -1,10 +1,5 @@
-// Shared labels with conservative migration from older browser-local preferences.
-// Never erase browser labels until server confirms their import.
-const legacyLabels=Array.isArray(data.labels)?data.labels.map(x=>({...x})):[];
-let labelsProject=null,labelsBusy=false,labelsLastFetch=0,labelsActive=false,legacyImportAttempt=0;
-const LABEL_IMPORT_KEY='artae_shared_label_import_v1_'+userId();
-let labelImports={};
-try{labelImports=JSON.parse(localStorage.getItem(LABEL_IMPORT_KEY)||'{}')||{}}catch{}
+// PostgreSQL is the sole source of truth for project labels.
+let labelsProject=null,labelsBusy=false,labelsLastFetch=0;
 function labelOwner(kind,item){
  if(kind==='message'){
   const m=data.messages.find(m=>m.id===item);
@@ -13,30 +8,14 @@ function labelOwner(kind,item){
   return data.convos.find(c=>c.id===convoId)?.project||null;
  }
  if(kind==='file'){
-  if(data.files.some(f=>f.id===item)){
-   const f=data.files.find(f=>f.id===item);
-   const m=data.messages.find(m=>m.id===f?.message);
+  const f=data.files.find(f=>f.id===item);
+  if(f){
+   const m=data.messages.find(m=>m.id===f.message);
    return data.convos.find(c=>c.id===m?.convo)?.project||null;
   }
-  // Project file paths are scoped by their pin or project explorer.
   if(data.pins.some(p=>p.kind==='file'&&p.item===item&&p.project===project))return project;
  }
  return null;
-}
-function labelImportCandidates(target){
- const groups=new Map();
- for(const l of legacyLabels){
-  if(!l||!['message','file'].includes(l.kind)||typeof l.item!=='string'||typeof l.name!=='string')continue;
-  const name=l.name.trim();
-  if(!name||name.length>40||labelOwner(l.kind,l.item)!==target)continue;
-  const key=l.kind+':'+l.item+':'+name;
-  if(labelImports[target+'|'+key])continue;
-  const group=l.kind+':'+l.item;
-  if(!groups.has(group))groups.set(group,{kind:l.kind,item:l.item,names:[],keys:[]});
-  const row=groups.get(group);
-  if(!row.names.includes(name)&&row.names.length<12){row.names.push(name);row.keys.push(target+'|'+key)}
- }
- return [...groups.values()];
 }
 async function labelsRequest(action,payload={},get=false){
  const url='/.netlify/functions/labels';
@@ -48,53 +27,18 @@ async function labelsRequest(action,payload={},get=false){
  if(!response.ok)throw Error(result.error||'Не удалось синхронизировать метки');
  return result;
 }
-async function importLegacyMessages(){
- if(Date.now()-legacyImportAttempt<3600000)return;
- legacyImportAttempt=Date.now();
- const groups=new Map();
- for(const l of legacyLabels){
-  if(l?.kind!=='message'||typeof l.item!=='string'||typeof l.name!=='string')continue;
-  const name=l.name.trim();
-  if(!name||name.length>40)continue;
-  const hasImported=Object.keys(labelImports).some(k=>k.endsWith('|message:'+l.item+':'+name));
-  if(hasImported)continue;
-  if(!groups.has(l.item))groups.set(l.item,[]);
-  const names=groups.get(l.item);
-  if(!names.includes(name)&&names.length<12)names.push(name);
- }
- const entries=[...groups.entries()].map(([item,names])=>({kind:'message',item,names}));
- for(let i=0;i<entries.length;i+=100){
-  const result=await labelsRequest('importLegacy',{labels:entries.slice(i,i+100)});
-  for(const row of result.imported||[])for(const name of row.names)
-   labelImports[row.project+'|message:'+row.item+':'+name]=true;
-  try{localStorage.setItem(LABEL_IMPORT_KEY,JSON.stringify(labelImports))}catch{}
- }
-}
 async function refreshSharedLabels(force=false){
  const target=project;
  if(!target||labelsBusy||!document.body)return;
  if(!force&&target===labelsProject&&Date.now()-labelsLastFetch<5000)return;
  labelsBusy=true;
  try{
-  await importLegacyMessages();
-  const candidates=labelImportCandidates(target);
-  if(candidates.length){
-   // Import is insert-only. A failed import never clears local labels.
-   for(let i=0;i<candidates.length;i+=100){
-    const batch=candidates.slice(i,i+100);
-    await labelsRequest('merge',{project:target,labels:batch.map(({kind,item,names})=>({kind,item,names}))});
-    for(const row of batch)for(const k of row.keys)labelImports[k]=true;
-    try{localStorage.setItem(LABEL_IMPORT_KEY,JSON.stringify(labelImports))}catch{}
-   }
-  }
-  const reply=await labelsRequest('',{project:target},true);
+  const response=await labelsRequest('',{project:target},true);
   if(project!==target)return;
-  const shared=(reply.labels||[]).map(l=>({...l,project:target}));
-  const sharedKeys=new Set(shared.map(l=>l.kind+'|'+l.item+'|'+l.name));
-  data.labels=data.labels.filter(l=>l.project!==target&&
-   !sharedKeys.has(l.kind+'|'+l.item+'|'+l.name)&&
-   (!labelOwner(l.kind,l.item)||labelOwner(l.kind,l.item)!==target)).concat(shared);
-  labelsProject=target;labelsLastFetch=Date.now();labelsActive=true;
+  const shared=(response.labels||[]).map(l=>({...l,project:target}));
+  // Drop stale copies of this project's labels, not labels for other projects.
+  data.labels=data.labels.filter(l=>l.project!==target).concat(shared);
+  labelsProject=target;labelsLastFetch=Date.now();
   if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
  }catch(error){console.warn('Shared labels:',error.message)}
  finally{labelsBusy=false}
@@ -105,12 +49,7 @@ async function saveSharedLabels(kind,item,text){
  const names=[...new Set(String(text).split(',').map(n=>n.trim()).filter(Boolean))].slice(0,12);
  if(names.some(n=>n.length>40))throw Error('Метка длиннее 40 символов');
  await labelsRequest('set',{project:target,kind,item,names});
- data.labels=data.labels.filter(l=>!(l.kind===kind&&l.item===item));
+ data.labels=data.labels.filter(l=>!(l.project===target&&l.kind===kind&&l.item===item));
  for(const name of names)data.labels.push({kind,item,name,project:target});
  labelsProject=target;labelsLastFetch=0;
- // A later refresh must not replay this device's older labels over a new edit.
- for(const l of legacyLabels)if(l.kind===kind&&l.item===item){
-  labelImports[target+'|'+kind+':'+item+':'+l.name.trim()]=true;
- }
- try{localStorage.setItem(LABEL_IMPORT_KEY,JSON.stringify(labelImports))}catch{}
 }
