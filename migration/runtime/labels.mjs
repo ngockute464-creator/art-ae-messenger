@@ -49,13 +49,25 @@ export default async function handler(req){
   if(action==='set'){
    await validate(project,kind,item);
    const names=namesOf(arg.names);
-   // Single transaction makes edits atomic: never lose old labels on failure.
-   await transaction(async tx=>{
+   const expected=namesOf(arg.expectedNames);
+   // Serialize only edits to this project/object; reject stale drafts instead
+   // of silently merging or losing another user's changes.
+   const result=await transaction(async tx=>{
+    await tx('SELECT pg_advisory_xact_lock(hashtextextended($1::text,0))',
+     [project+'|'+kind+'|'+item]);
+    const {rows:existing}=await tx(
+     'SELECT name FROM public.artae_labels WHERE project_id=$1 AND item_kind=$2 AND item_key=$3 ORDER BY name',
+     [project,kind,item]);
+    const current=existing.map(row=>row.name).sort();
+    if(JSON.stringify(current)!==JSON.stringify([...expected].sort()))
+     return {conflict:true,names:current};
     await tx('DELETE FROM public.artae_labels WHERE project_id=$1 AND item_kind=$2 AND item_key=$3',[project,kind,item]);
     for(const name of names)await tx(
      'INSERT INTO public.artae_labels(project_id,item_kind,item_key,name,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6)',
      [project,kind,item,name,session.user.id,Date.now()]);
+    return {ok:true};
    });
+   if(result.conflict)return reply({error:'Метки изменены другим участником. Обновите и повторите.',names:result.names},409);
    return reply({ok:true});
   }
   return reply({error:'Неизвестное действие'},404);
