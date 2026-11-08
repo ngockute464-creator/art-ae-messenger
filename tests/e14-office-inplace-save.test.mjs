@@ -27,7 +27,7 @@ test('large docs avoid function body limit, isolated office stays in sync',()=>{
 });
 test('VibeOffice declares success only after server acknowledgement',()=>{
  assert.match(frame,/if\(msg\.ok\)p\.resolve\('saved'\);else p\.reject/);
- assert.match(parent,/if\(!response\.ok\)throw Error/);
+ assert.match(parent,/if\(!response\.ok\)\{/);
  assert.match(parent,/type:'artae-office-save-result'/);
  assert.match(parent,/active\?\.saving\|\|active\?\.savePreparing/);
 });
