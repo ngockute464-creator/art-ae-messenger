@@ -138,13 +138,20 @@ async function voiceStart(gesture=null){
   if(gesture&&(gesture.ended||voiceHoldGesture!==gesture)){
    stream.getTracks().forEach(t=>t.stop());return;
   }
-  const supported=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(type=>MediaRecorder.isTypeSupported(type));
+  // iOS WebKit encodes MP4 most reliably; some versions advertise WebM but
+  // produce an empty first fragment when stopped or flushed immediately.
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent||'')||
+   (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const candidates=ios?['audio/mp4','audio/webm;codecs=opus','audio/webm']:
+   ['audio/webm;codecs=opus','audio/mp4','audio/webm'];
+  const supported=candidates.find(type=>MediaRecorder.isTypeSupported(type));
   const rec=new MediaRecorder(stream,supported?{mimeType:supported,audioBitsPerSecond:48000}:{audioBitsPerSecond:48000});
   const mime=(rec.mimeType||supported||'').toLowerCase();
   const format=mime.includes('mp4')?'mp4':mime.includes('webm')?'webm':null;
   if(!format)throw Error('Неподдерживаемый формат записи');
   const d={id:crypto.randomUUID(),convo,format,mime,rec,stream,status:'recording',
-   started:Date.now(),pieces:[],preview:null,seconds:0,autoSend:false};
+   started:Date.now(),pieces:[],preview:null,seconds:0,autoSend:false,
+   ios,minStopTimer:null};
   voiceDraft=d;newDraft=d;
   rec.ondataavailable=event=>{if(voiceDraft===d&&event.data?.size)d.pieces.push(event.data)};
   rec.onerror=()=>{
@@ -158,14 +165,17 @@ async function voiceStart(gesture=null){
    if(voiceDraft!==d)return;
    d.seconds=Math.max(1,Math.round((Date.now()-d.started)/1000));
    if(!d.pieces.length){
-    voiceDraft=null;render();composerRefresh();alert('Запись пуста');return;
+    voiceDraft=null;render();composerRefresh();alert('Аудио не получено. Удерживайте микрофон чуть дольше и повторите запись.');return;
    }
    if(d.status!=='failed')d.status='ready';
    d.preview=URL.createObjectURL(new Blob(d.pieces,{type:d.mime}));
    if(d.autoSend&&d.status==='ready')void voiceSend();
    else render();
   };
-  rec.start(15000);
+  // Safari should encode a continuous stream until stop() flushes the file.
+  // Its requestData() may emit a zero-byte MP4 segment before the encoder
+  // has produced a valid container header.
+  if(ios)rec.start();else rec.start(15000);
   if(gesture){
    gesture.recording=true;gesture.startedAt=d.started;voicePaintHold();
   }else render();
@@ -183,14 +193,27 @@ function voiceStop(autoSend=false){
  const d=voiceDraft;if(!d||d.status!=='recording')return;
  d.autoSend=!!autoSend;
  d.status='stopping';
- try{
-  d.rec.requestData();
-  d.rec.stop();
- }catch(error){console.error('Voice stop',error);voiceCancel()}
+ const stopRecorder=()=>{
+  if(voiceDraft!==d||d.rec.state!=='recording')return;
+  d.minStopTimer=null;
+  try{
+   // stop() itself flushes the final dataavailable event. Issuing
+   // requestData() immediately beforehand can generate a zero-size chunk
+   // on iOS Safari and leave no usable MP4 payload.
+   if(!d.ios)d.rec.requestData();
+   d.rec.stop();
+  }catch(error){console.error('Voice stop',error);voiceCancel()}
+ };
+ // A very short recording on iOS may contain no encoded audio. Give
+ // WebKit's MP4 encoder time to initialize before closing the container.
+ const remaining=d.ios?Math.max(0,1100-(Date.now()-d.started)):0;
+ if(remaining>0)d.minStopTimer=setTimeout(stopRecorder,remaining);
+ else stopRecorder();
 }
 function voiceCancel(){
  const d=voiceDraft;if(!d)return;
  voiceDraft=null;
+ if(d.minStopTimer!==null)clearTimeout(d.minStopTimer);
  if(d.rec?.state==='recording')try{d.rec.stop()}catch{}
  d.stream?.getTracks().forEach(t=>t.stop());
  if(d.preview)URL.revokeObjectURL(d.preview);
