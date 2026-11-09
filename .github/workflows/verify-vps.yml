@@ -40,7 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const s=require('fs').readFileSync('public/styles.css','utf8');for(const x of s.matchAll(/([^{}]+)\\{([^{}]*)\\}/g)){if(/(?:^|[\\s>,])(?:\\.composeLine|\\.composer|\\.main|\\.split|\\.msgscroll|\\.chat|\\.app|#draft|\\.workspace|\\.topbar|\\.mobile-chat)/.test(x[1])&&/(width|min-width|overflow|padding|margin|position|display|flex|grid|bottom|height)/.test(x[2]))console.log('COMPOSER_CSS',JSON.stringify([x[1].trim(),x[2].trim()].join(' { ')).slice(0,900))}"
+          node -e "const s=require('fs').readFileSync('public/styles.css','utf8');for(const x of s.matchAll(/([^{}]+)\\{([^{}]*)\\}/g)){if(/(?:^|[,\\s])(?:\\.composerBody|\\.composeLine|\\.chat|\\.main|\\.split|\\.chatMessages|\\.workspace|\\.app|\\.chatHead)/.test(x[1])&&/(width|padding|box-sizing|position|height|overflow|flex|grid)/.test(x[2]))console.log('CHAT_LAYOUT_CSS',JSON.stringify([x[1].trim(),x[2].trim()].join(' { ')).slice(0,700))}const a=require('fs').readFileSync('public/app.js','utf8');for(const n of ['class=\\\"composerBody\\\"','class=\\\"composeLine\\\"','function chatView(','function chatPanel(']){const i=a.indexOf(n);console.log('CHAT_LAYOUT_HTML',n,i,a.slice(Math.max(0,i-300),i+900))}"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
