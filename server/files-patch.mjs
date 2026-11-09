@@ -418,7 +418,7 @@ css+=`
 // Mobile Safari: make the composer an explicitly bounded flex container.
 // The editor must use remaining width, not width:100% plus two fixed buttons.
 // In particular, focus/keyboard opening must never push the send button offscreen.
-css+='\\n'+String.raw`
+css+='\n'+String.raw`
 @media(max-width:650px){
  .app.mobile-chat .compose{
   box-sizing:border-box;width:100%;max-width:100%;min-width:0;
