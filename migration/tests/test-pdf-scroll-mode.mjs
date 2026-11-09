@@ -14,7 +14,7 @@ assert.match(code,/viewport\.addEventListener\('scroll',onScroll,\{passive:true\
 assert.match(code,/viewport\.removeEventListener\('scroll',onScroll\)/);
 assert.match(app,/function explorerPdfDocumentViewer\(/);
 assert.match(style,/\.artaePdfViewport\.artaePdfContinuous/);
-assert.match(version,/"version":"0\.4\.23-preview"/);
+assert.match(version,/"version":"0\.4\.24-preview"/);
 
 class FakeElement {
  constructor(tag){
