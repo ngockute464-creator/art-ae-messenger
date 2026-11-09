@@ -415,4 +415,27 @@ css+=`
 .artaePinnedFileNote{flex-basis:100%;font-size:12px;color:var(--muted,#718096);overflow-wrap:anywhere}
 @media(max-width:650px){.pin-card,.artaePinnedFileCard{border-width:2px}.artaePinnedFileCard{padding:12px 10px}}
 `;
+// Mobile Safari: make the composer an explicitly bounded flex container.
+// The editor must use remaining width, not width:100% plus two fixed buttons.
+// In particular, focus/keyboard opening must never push the send button offscreen.
+css+='\\n'+String.raw`
+@media(max-width:650px){
+ .app.mobile-chat .compose{
+  box-sizing:border-box;width:100%;max-width:100%;min-width:0;
+ }
+ .app.mobile-chat .composerBody,
+ .app.mobile-chat .composeLine{
+  box-sizing:border-box;width:100%;max-width:100%;min-width:0;
+ }
+ .app.mobile-chat .composeLine>textarea#draft{
+  box-sizing:border-box;width:0;min-width:0;max-width:100%;
+  flex:1 1 0%;
+ }
+ .app.mobile-chat .composeLine>.composerAttach,
+ .app.mobile-chat .composeLine>.voiceMic,
+ .app.mobile-chat .composeLine>.composerSend{
+  flex:0 0 40px;
+ }
+}
+`;
 writeFileSync(cssFile,css);
