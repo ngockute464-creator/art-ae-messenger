@@ -40,6 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
+          node -e "const s=require('fs').readFileSync('public/styles.css','utf8');for(const x of s.matchAll(/([^{}]+)\\{([^{}]*)\\}/g)){if(/(?:^|[\\s>,])(?:\\.composeLine|\\.composer|\\.main|\\.split|\\.msgscroll|\\.chat|\\.app|#draft|\\.workspace|\\.topbar|\\.mobile-chat)/.test(x[1])&&/(width|min-width|overflow|padding|margin|position|display|flex|grid|bottom|height)/.test(x[2]))console.log('COMPOSER_CSS',JSON.stringify([x[1].trim(),x[2].trim()].join(' { ')).slice(0,900))}"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
