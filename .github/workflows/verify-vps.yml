@@ -40,7 +40,6 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const s=require('fs').readFileSync('public/styles.css','utf8');for(const k of ['.composerBody','.composeLine','.composer{','.chat form','.chat .composer','.chatFooter','.compose','.composeLine>textarea#draft']){let n=0,from=0;while(n<7){const i=s.indexOf(k,from);if(i<0)break;console.log('EXACT_CHAT_CSS',k,i,s.slice(Math.max(0,i-100),i+350).replace(/\\n/g,' '));from=i+k.length;n++}}const a=require('fs').readFileSync('public/app.js','utf8');const i=a.indexOf('class=\\\"composerBody\\\"');console.log('EXACT_CHAT_HTML',a.slice(i-230,i+1500))"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
@@ -63,6 +62,7 @@ jobs:
           node migration/tests/check-ui-markup.mjs
           node migration/tests/test-mobile-composer-voice.mjs
           node migration/tests/test-mobile-composer-interactions.mjs
+          node migration/tests/test-ios-composer-width.mjs
           node migration/tests/test-ios-voice-recorder.mjs
           node migration/tests/test-composer-focus.mjs
           node migration/tests/test-chat-media.mjs
