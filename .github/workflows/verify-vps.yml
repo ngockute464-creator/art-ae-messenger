@@ -40,7 +40,7 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const s=require('fs').readFileSync('public/styles.css','utf8');for(const x of s.matchAll(/([^{}]+)\\{([^{}]*)\\}/g)){if(/(?:^|[,\\s])(?:\\.composerBody|\\.composeLine|\\.chat|\\.main|\\.split|\\.chatMessages|\\.workspace|\\.app|\\.chatHead)/.test(x[1])&&/(width|padding|box-sizing|position|height|overflow|flex|grid)/.test(x[2]))console.log('CHAT_LAYOUT_CSS',JSON.stringify([x[1].trim(),x[2].trim()].join(' { ')).slice(0,700))}const a=require('fs').readFileSync('public/app.js','utf8');for(const n of ['class=\\\"composerBody\\\"','class=\\\"composeLine\\\"','function chatView(','function chatPanel(']){const i=a.indexOf(n);console.log('CHAT_LAYOUT_HTML',n,i,a.slice(Math.max(0,i-300),i+900))}"
+          node -e "const s=require('fs').readFileSync('public/styles.css','utf8');for(const k of ['.composerBody','.composeLine','.composer{','.chat form','.chat .composer','.chatFooter','.compose','.composeLine>textarea#draft']){let n=0,from=0;while(n<7){const i=s.indexOf(k,from);if(i<0)break;console.log('EXACT_CHAT_CSS',k,i,s.slice(Math.max(0,i-100),i+350).replace(/\\n/g,' '));from=i+k.length;n++}}const a=require('fs').readFileSync('public/app.js','utf8');const i=a.indexOf('class=\\\"composerBody\\\"');console.log('EXACT_CHAT_HTML',a.slice(i-230,i+1500))"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
