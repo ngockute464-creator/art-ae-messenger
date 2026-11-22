@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 const gitBuild=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(!/^[a-f0-9]{40}$/.test(gitBuild))throw Error('PWA: no verified Git build SHA');
 const buildId=gitBuild; // The release manager and GitHub Actions both use pinned Git checkouts.
-const version='0.4.25-preview';
+const version='0.4.26-preview';
 
 // User-supplied icon assets: original 32px favicon and scalable AE brand mark.
 copyFileSync('server/ae-brand.svg','public/ae-brand.svg');
