@@ -53,7 +53,9 @@ async function currentSubscription(){
 }
 // Push is recommended by default, but never bypasses browser permission.
 const PUSH_OPT_OUT='artae_push_explicitly_disabled_v1';
-const PUSH_PROMPT_DISMISSED='artae_push_prompt_dismissed_v1';
+// 'Not now' is session-only. Legacy persisted suppression must not survive restarts.
+const PUSH_OLD_DISMISS_KEY='artae_push_prompt_dismissed_v1';
+try{localStorage.removeItem(PUSH_OLD_DISMISS_KEY)}catch{}
 const pushChoice=key=>{try{return localStorage.getItem(key)==='1'}catch{return false}};
 const savePushChoice=(key,value)=>{try{if(value)localStorage.setItem(key,'1');else localStorage.removeItem(key)}catch{}};
 async function establishPush(){
@@ -134,7 +136,7 @@ function mountPush(panel){
    status.textContent='Подключаем устройство…';
    await establishPush();
    savePushChoice(PUSH_OPT_OUT,false);
-   savePushChoice(PUSH_PROMPT_DISMISSED,false);
+   pushDeferredForSession=false;
    status.textContent='Уведомления включены';
    enabled=true;
   }catch(error){status.textContent=String(error?.message||error)}
@@ -177,10 +179,10 @@ function mountPush(panel){
 window.ARTAE_PUSH_MOUNT=mountPush;
 // Offer notifications on first authenticated use. The permission prompt must
 // originate from the user's explicit button click, including in iOS PWA.
-let pushWelcomeShown=false,pushAutoBusy=false,pushAutoReady=false;
+let pushWelcomeShown=false,pushDeferredForSession=false,pushAutoBusy=false,pushAutoReady=false;
 function removePushWelcome(){document.querySelector?.('#artaePushWelcome')?.remove?.()}
 function createPushWelcome(){
- if(pushWelcomeShown||pushChoice(PUSH_PROMPT_DISMISSED))return;
+ if(pushWelcomeShown||pushDeferredForSession)return;
  if(!document.createElement||!document.body)return;
  pushWelcomeShown=true;
  const box=document.createElement('div');box.id='artaePushWelcome';
@@ -193,18 +195,18 @@ function createPushWelcome(){
  yes.addEventListener('click',async()=>{
   // User activation is still active at this synchronous permission call.
   const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
-  if(permission!=='granted'){savePushChoice(PUSH_PROMPT_DISMISSED,true);removePushWelcome();return}
+  if(permission!=='granted'){pushDeferredForSession=true;removePushWelcome();return}
   try{
    await establishPush();pushAutoReady=true;
    savePushChoice(PUSH_OPT_OUT,false);
-   savePushChoice(PUSH_PROMPT_DISMISSED,false);
+   pushDeferredForSession=false;
    removePushWelcome();
   }catch(error){
    message.textContent='Не удалось подключить уведомления: '+String(error?.message||error);
   }
  });
  later.addEventListener('click',()=>{
-  savePushChoice(PUSH_PROMPT_DISMISSED,true);
+  pushDeferredForSession=true;
   removePushWelcome();
  });
  document.body.append(box);
@@ -219,7 +221,7 @@ async function offerDefaultPush(){
  try{
   if(Notification.permission==='granted'){
    await establishPush();pushAutoReady=true;removePushWelcome();
-  }else if(!pushWelcomeShown&&!pushChoice(PUSH_PROMPT_DISMISSED)){
+  }else if(!pushWelcomeShown&&!pushDeferredForSession){
    const config=await request('config');
    if(config?.enabled)createPushWelcome();
   }
