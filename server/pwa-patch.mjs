@@ -6,12 +6,17 @@ import {execFileSync} from 'node:child_process';
 const gitBuild=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(!/^[a-f0-9]{40}$/.test(gitBuild))throw Error('PWA: no verified Git build SHA');
 const buildId=gitBuild; // The release manager and GitHub Actions both use pinned Git checkouts.
-const version='0.4.24-preview';
+const version='0.4.25-preview';
 
+// User-supplied icon assets: original 32px favicon and scalable AE brand mark.
+copyFileSync('server/ae-brand.svg','public/ae-brand.svg');
+copyFileSync('server/ae-brand.svg','public/icon.svg');
+writeFileSync('public/favicon.png',Buffer.from(readFileSync('server/ae-favicon.base64','utf8').trim(),'base64'));
 const indexPath='public/index.html';
 let html=readFileSync(indexPath,'utf8');
 if(!html.includes('href="manifest.webmanifest"')||!html.includes('</body>')||!html.includes('</head>'))
  throw Error('PWA: unexpected application HTML');
+html=html.replace('</head>','<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png"><link rel="apple-touch-icon" href="/icon.svg"></head>');
 html=html.replace('</head>',
  '<meta name="apple-mobile-web-app-capable" content="yes">'+
  '<meta name="apple-mobile-web-app-status-bar-style" content="default">'+
@@ -28,7 +33,13 @@ let app=readFileSync(appPath,'utf8');
 const profile='<button type="button" role="menuitem" data-act="editProfile">Мой профиль</button>';
 if(!app.includes(profile))throw Error('PWA: profile menu template changed');
 app=app.replace(profile,profile+'<button type="button" role="menuitem" data-act="appInstallInfo">Приложение</button>');
+const brandText='>◉ АРТ-АЕ</button>';
+if(!app.includes(brandText))throw Error('PWA: header brand marker changed');
+app=app.replace(brandText,'><img class="artaeBrandLogo" src="/ae-brand.svg" alt="" aria-hidden="true">АРТ-АЕ</button>');
 writeFileSync(appPath,app);
+let brandCss=readFileSync('public/styles.css','utf8');
+brandCss+='\n.artaeBrandLogo{display:inline-block;vertical-align:middle;width:30px;height:30px;object-fit:contain;flex:none;margin-right:6px}';
+writeFileSync('public/styles.css',brandCss);
 
 const manifestPath='public/manifest.webmanifest';
 const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
@@ -37,6 +48,7 @@ manifest.display='standalone';
 manifest.start_url='./';
 manifest.scope='./';
 manifest.lang='ru';
+manifest.icons=[{src:'icon.svg',sizes:'any',type:'image/svg+xml',purpose:'any maskable'}];
 writeFileSync(manifestPath,JSON.stringify(manifest));
 
 // Do not cache private API responses, files or the bundled Office editor.
@@ -46,7 +58,7 @@ const oldWorker=readFileSync('public/sw.js','utf8');
 if(!oldWorker.includes("self.addEventListener('fetch'")||
    !oldWorker.includes("self.addEventListener('install'"))throw Error('PWA: unexpected existing service worker');
 const sw=String.raw`const CACHE='art-ae-release-__BUILD__';
-const FILES=['./','./index.html','./styles.css','./app.js','./auth.js','./auth.css','./manifest.webmanifest','./icon.svg','./pwa-client.js','./office-client.js','./vendor/pdfjs/pdf.mjs','./vendor/pdfjs/pdf.worker.mjs'];
+const FILES=['./','./index.html','./styles.css','./app.js','./auth.js','./auth.css','./manifest.webmanifest','./icon.svg','./ae-brand.svg','./favicon.png','./pwa-client.js','./office-client.js','./vendor/pdfjs/pdf.mjs','./vendor/pdfjs/pdf.worker.mjs'];
 const PATHS=new Set(FILES.map(p=>new URL(p,self.registration.scope).pathname));
 self.addEventListener('install',event=>{
  event.waitUntil((async()=>{
