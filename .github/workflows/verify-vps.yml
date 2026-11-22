@@ -40,7 +40,6 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const s=require('fs').readFileSync('public/app.js','utf8');for(const q of ['АРТ-АЕ','class=\"brand','class=\"logo','class=\"top','<header']){let i=0,n=0;while((i=s.indexOf(q,i))>=0&&n++<6){console.log('BRAND_INSPECT',q,i,s.slice(Math.max(0,i-160),i+280));i+=q.length}}const h=require('fs').readFileSync('public/index.html','utf8');console.log('INDEX_INSPECT',h.slice(0,700));console.log('MANIFEST_INSPECT',require('fs').readFileSync('public/manifest.webmanifest','utf8'))"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
@@ -52,6 +51,8 @@ jobs:
           node --check migration/runtime/push-transport.mjs
           node migration/tests/test-push-artifacts.mjs
           node migration/tests/test-push-controls.mjs
+          node migration/tests/test-push-defaults.mjs
+          node migration/tests/test-brand-identity.mjs
           test -s migration/sql/004_web_push.sql
           grep -q "artaePushControls" public/push-client.js
           grep -q "ARTAE_PUSH_OPEN" public/sw.js
