@@ -3,9 +3,9 @@ import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 const source=readFileSync('server/push-client.js','utf8');
 const pub=Buffer.alloc(65,1).toString('base64url');
-async function scenario(initialPermission,disabled=false){
+async function scenario(initialPermission,disabled=false,persistedStore=null){
  let permission=initialPermission,requested=0,subscriptions=0,subscribedPosts=0;
- const store=new Map(disabled?[['artae_push_explicitly_disabled_v1','1']]:[]);
+ const store=persistedStore||new Map(disabled?[['artae_push_explicitly_disabled_v1','1']]:[]);
  let banner=null;
  function element(tag){
   const el={tag,children:[],hidden:false,textContent:'',style:{},
@@ -68,7 +68,18 @@ assert.equal(d.subscriptions,1);
 let opted=await scenario('granted',true);
 assert.equal(opted.subscriptions,0,'Explicit opt-out prevents auto subscribe');
 assert.equal(opted.banner,null);
+let deferred=await scenario('default');
+assert.ok(deferred.banner,'First session shows invitation');
+deferred.banner.children[2].onclick();
+assert.equal(deferred.banner,null,'Not now closes the invitation');
+assert.equal(deferred.store.has('artae_push_prompt_dismissed_v1'),false,'Dismissal is never permanent');
+let nextLaunch=await scenario('default',false,deferred.store);
+assert.ok(nextLaunch.banner,'New app launch shows invitation again after Not now');
+let oldStore=new Map([['artae_push_prompt_dismissed_v1','1']]);
+let legacy=await scenario('default',false,oldStore);
+assert.ok(legacy.banner,'Previously saved old dismissals must not block new release');
+assert.equal(oldStore.has('artae_push_prompt_dismissed_v1'),false);
 let denied=await scenario('denied');
 assert.equal(denied.requested,0);
 assert.equal(denied.banner,null);
-console.log('PUSH_DEFAULTS_OK auto_if_granted=true button_only_prompt=true optout=true denied_respected=true');
+console.log('PUSH_DEFAULTS_OK auto_if_granted=true button_only_prompt=true optout=true denied_respected=true defer_until_next_launch=true legacy_dismissal_reset=true');
