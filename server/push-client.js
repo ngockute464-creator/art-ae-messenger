@@ -51,6 +51,27 @@ async function currentSubscription(){
  return reg?.active?withTimeout(reg.pushManager.getSubscription(),8000,
   'Push Manager не отвечает'):null;
 }
+// Push is recommended by default, but never bypasses browser permission.
+const PUSH_OPT_OUT='artae_push_explicitly_disabled_v1';
+const PUSH_PROMPT_DISMISSED='artae_push_prompt_dismissed_v1';
+const pushChoice=key=>{try{return localStorage.getItem(key)==='1'}catch{return false}};
+const savePushChoice=(key,value)=>{try{if(value)localStorage.setItem(key,'1');else localStorage.removeItem(key)}catch{}};
+async function establishPush(){
+ const config=await request('config');
+ if(!config?.enabled||!config.publicKey)throw Error('На сервере не настроены Push-уведомления');
+ const reg=await registration(true);
+ if(!reg)throw Error('Service Worker недоступен');
+ const existing=await withTimeout(reg.pushManager.getSubscription(),8000,'Push Manager не отвечает');
+ if(existing){
+  request.endpoint=existing.endpoint;
+  if((await request('status')).subscribed)return existing;
+ }
+ const subscription=existing||await withTimeout(reg.pushManager.subscribe({
+  userVisibleOnly:true,applicationServerKey:keyBytes(config.publicKey)
+ }),12000,'Не удалось создать Push-подписку');
+ await request('subscribe',{subscription:subscription.toJSON()});
+ return subscription;
+}
 function mountPush(panel){
  const label=document.createElement('p');label.className='artaePwaSmall';
  label.textContent='Уведомления';panel.append(label);
@@ -110,17 +131,10 @@ function mountPush(panel){
    // Prompt immediately on the user click (mandatory for iOS).
    const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
    if(permission!=='granted')throw Error('Разрешение на уведомления не предоставлено');
-   config=config?.publicKey?config:await request('config');
-   if(!config.publicKey)throw Error('На сервере отсутствует открытый VAPID-ключ');
    status.textContent='Подключаем устройство…';
-   const reg=await registration(true);
-   if(!reg)throw Error('Не удалось зарегистрировать Service Worker');
-   const subscription=(await withTimeout(reg.pushManager.getSubscription(),8000,
-     'Push Manager не отвечает'))||
-    await withTimeout(reg.pushManager.subscribe({
-     userVisibleOnly:true,applicationServerKey:keyBytes(config.publicKey)
-    }),12000,'Не удалось создать Push-подписку');
-   await request('subscribe',{subscription:subscription.toJSON()});
+   await establishPush();
+   savePushChoice(PUSH_OPT_OUT,false);
+   savePushChoice(PUSH_PROMPT_DISMISSED,false);
    status.textContent='Уведомления включены';
    enabled=true;
   }catch(error){status.textContent=String(error?.message||error)}
@@ -139,6 +153,7 @@ function mountPush(panel){
     await sub.unsubscribe();
    }
    enabled=false;
+   savePushChoice(PUSH_OPT_OUT,true);
    status.textContent='Уведомления выключены';
   }catch(error){status.textContent=String(error?.message||error)}
   finally{busy=false;stateButtons()}
@@ -160,6 +175,63 @@ function mountPush(panel){
  void sync();
 }
 window.ARTAE_PUSH_MOUNT=mountPush;
+// Offer notifications on first authenticated use. The permission prompt must
+// originate from the user's explicit button click, including in iOS PWA.
+let pushWelcomeShown=false,pushAutoBusy=false,pushAutoReady=false;
+function removePushWelcome(){document.querySelector?.('#artaePushWelcome')?.remove?.()}
+function createPushWelcome(){
+ if(pushWelcomeShown||pushChoice(PUSH_PROMPT_DISMISSED))return;
+ if(!document.createElement||!document.body)return;
+ pushWelcomeShown=true;
+ const box=document.createElement('div');box.id='artaePushWelcome';
+ box.setAttribute('role','region');box.setAttribute('aria-label','Уведомления');
+ const message=document.createElement('span');
+ message.textContent='Получать уведомления о новых сообщениях?';
+ const yes=document.createElement('button');yes.type='button';yes.textContent='Включить';
+ const later=document.createElement('button');later.type='button';later.textContent='Не сейчас';
+ box.append(message,yes,later);
+ yes.addEventListener('click',async()=>{
+  // User activation is still active at this synchronous permission call.
+  const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
+  if(permission!=='granted'){savePushChoice(PUSH_PROMPT_DISMISSED,true);removePushWelcome();return}
+  try{
+   await establishPush();pushAutoReady=true;
+   savePushChoice(PUSH_OPT_OUT,false);
+   savePushChoice(PUSH_PROMPT_DISMISSED,false);
+   removePushWelcome();
+  }catch(error){
+   message.textContent='Не удалось подключить уведомления: '+String(error?.message||error);
+  }
+ });
+ later.addEventListener('click',()=>{
+  savePushChoice(PUSH_PROMPT_DISMISSED,true);
+  removePushWelcome();
+ });
+ document.body.append(box);
+}
+async function offerDefaultPush(){
+ if(pushAutoReady||pushAutoBusy||!supported()||pushChoice(PUSH_OPT_OUT))return;
+ if(isIOS()&&!standalone())return;
+ // Do not show any invitation before the user is logged in and the app renders.
+ if(!document.querySelector?.('.app'))return;
+ if(Notification.permission==='denied'){removePushWelcome();return}
+ pushAutoBusy=true;
+ try{
+  if(Notification.permission==='granted'){
+   await establishPush();pushAutoReady=true;removePushWelcome();
+  }else if(!pushWelcomeShown&&!pushChoice(PUSH_PROMPT_DISMISSED)){
+   const config=await request('config');
+   if(config?.enabled)createPushWelcome();
+  }
+ }catch(error){console.warn('ART-AE default push:',error?.message||error)}
+ finally{pushAutoBusy=false}
+}
+setTimeout(()=>{void offerDefaultPush()},3500);
+setInterval(()=>{void offerDefaultPush()},15000);
+const welcomeStyle=document.createElement('style');
+welcomeStyle.textContent='#artaePushWelcome{position:fixed;left:50%;top:75px;transform:translateX(-50%);z-index:10000;display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 15px;width:max-content;max-width:calc(100vw - 28px);box-sizing:border-box;border:1px solid #c9d8ec;border-radius:12px;background:#fff;color:#24354b;box-shadow:0 7px 25px #2233;font:14px system-ui}#artaePushWelcome span{flex:1 1 170px}#artaePushWelcome button{border:1px solid #bed0e9;border-radius:7px;background:#eef5ff;color:#245eaa;padding:8px 12px;cursor:pointer}';
+document.head.append(welcomeStyle);
+
 const fromUrl=()=>new URL(location.href).searchParams.get('push_convo');
 let pending=UUID.test(fromUrl()||'')?fromUrl():null;
 function setPending(id){
