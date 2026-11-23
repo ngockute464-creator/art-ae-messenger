@@ -10,6 +10,8 @@ assert.match(app,/class="sidebar" id="artaeProjectsDrawer"/);
 assert.match(app,/class="projectsDrawerScrim" data-act="projectsDrawerClose"/);
 assert.match(app,/projectsDrawerOpen\?' projects-drawer-open'/);
 assert.match(css,/@media\(min-width:651px\)/);
+assert.match(css,/\n\.projectsDrawerToggle\{/,'Drawer rules must start as valid CSS, not literal backslash-n');
+assert.doesNotMatch(css,/\\\\n\.projectsDrawerToggle\{/,'No escaped newline in stylesheet');
 assert.match(css,/\.app \.workspace\{grid-template-columns:minmax\(0,1fr\)!important/);
 assert.match(css,/\.app\.projects-drawer-open \.workspace>\.sidebar/);
 assert.match(css,/\.app\.projects-drawer-open \.projectsDrawerScrim/);
