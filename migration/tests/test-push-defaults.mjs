@@ -45,7 +45,7 @@ async function scenario(initialPermission,disabled=false,persistedStore=null){
   console:{warn(){}}
  };
  runInNewContext(source,context);
- const start=scheduled.find(t=>t.ms===3500);
+ const start=scheduled.find(t=>t.ms===1200);
  assert.ok(start,'Default push must start after application initialization');
  start.fn();
  for(let i=0;i<30;i++)await Promise.resolve();
