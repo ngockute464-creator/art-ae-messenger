@@ -78,6 +78,7 @@ jobs:
           node migration/tests/test-pinned-navigation.mjs
           node migration/tests/test-shared-message-actions.mjs
           node migration/tests/test-projects-drawer.mjs
+          node migration/tests/test-fast-conversation-switch.mjs
           node --check migration/runtime/sync.mjs
           node migration/tests/test-shared-labels.mjs
           node migration/tests/test-label-project-switch.mjs
