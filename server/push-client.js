@@ -180,18 +180,18 @@ window.ARTAE_PUSH_MOUNT=mountPush;
 // Initial push state must never fail silently: show a recoverable status when
 // the server or subscription fails, but never request permission without a click.
 let pushWelcomeShown=false,pushDeferredForSession=false,pushAutoBusy=false,pushAutoReady=false;
-let pushWelcomeMode=null;
+let pushWelcomeMode=null,pushWelcomeDetail='';
 function removePushWelcome(){
  document.querySelector?.('#artaePushWelcome')?.remove?.();
- pushWelcomeMode=null;
+ pushWelcomeMode=null;pushWelcomeDetail='';
 }
 function createPushWelcome(mode='invite',detail=''){
  if(pushDeferredForSession||pushChoice(PUSH_OPT_OUT))return;
  if(!document.createElement||!document.body)return;
  const previous=document.querySelector?.('#artaePushWelcome');
- if(previous&&pushWelcomeMode===mode&&mode==='invite')return;
+ if(previous&&pushWelcomeMode===mode&&(mode==='invite'||pushWelcomeDetail===detail))return;
  if(previous)previous.remove();
- pushWelcomeShown=true;pushWelcomeMode=mode;
+ pushWelcomeShown=true;pushWelcomeMode=mode;pushWelcomeDetail=detail;
  const box=document.createElement('div');box.id='artaePushWelcome';
  box.setAttribute('role','region');box.setAttribute('aria-label','Уведомления');
  const message=document.createElement('span');
