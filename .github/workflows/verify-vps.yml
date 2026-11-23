@@ -83,6 +83,7 @@ jobs:
           node --check migration/runtime/sync.mjs
           node migration/tests/test-shared-labels.mjs
           node migration/tests/test-label-project-switch.mjs
+          node migration/tests/test-label-poll-no-flicker.mjs
           node migration/tests/test-shared-avatars.mjs
           node --check migration/runtime/avatars.mjs
           test -s migration/sql/008_shared_avatars.sql
