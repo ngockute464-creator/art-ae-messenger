@@ -18,7 +18,7 @@ const avatarOk=x=>x===null||(typeof x==='string'&&x.length<=80000&&/^data:image\
 const originOk=req=>{try{return new URL(req.headers.get('origin')).origin===new URL(req.url).origin}catch{return false}};
 const projectView=r=>({id:r.id,name:r.name,folderPath:r.folder_path,avatar:r.avatar,createdAt:Number(r.created_at),createdBy:r.created_by,updatedAt:r.updated_at===null?null:Number(r.updated_at)});
 const convoView=r=>({id:r.id,name:r.name,project:r.project_id,avatar:r.avatar,createdAt:Number(r.created_at),updatedAt:r.updated_at===null?null:Number(r.updated_at)});
-const messageView=r=>({id:r.id,convo:r.conversation_id,authorId:r.author_id,who:r.author_name,text:r.deleted_at===null?r.body:'',time:Number(r.created_at),editedAt:r.edited_at===null?null:Number(r.edited_at),deletedAt:r.deleted_at===null?null:Number(r.deleted_at)});
+const messageView=r=>({id:r.id,convo:r.conversation_id,authorId:r.author_id,who:r.author_name,text:r.deleted_at===null?r.body:'',time:Number(r.created_at),editedAt:r.edited_at===null?null:Number(r.edited_at),editedBy:r.edited_by||null,deletedAt:r.deleted_at===null?null:Number(r.deleted_at)});
 
 async function one(table,id) {
   if(!uuid(id))return null;
@@ -283,7 +283,7 @@ export default async function handler(req) {
       const m=await one('message',body.id);
       if(!m||m.conversation_id!==body.convo||m.deleted_at!==null||!await activeConvo(body.convo))
         return reply({error:'Сообщение не найдено'},404);
-      if(m.author_id!==session.user.id)return reply({error:'Можно изменять только свои сообщения'},403);
+      if(action==='delete'&&m.author_id!==session.user.id)return reply({error:'Удалять можно только свои сообщения'},403);
       if(!Object.hasOwn(body,'expectedEditedAt')||
         !(body.expectedEditedAt===null||(Number.isSafeInteger(body.expectedEditedAt)&&body.expectedEditedAt>=0)))
         return reply({error:'Обновите сообщение перед изменением'},409);
@@ -297,10 +297,10 @@ export default async function handler(req) {
       const updated=await transaction(async tx=>{
         const {rows:[changed]}=await tx(
           isEdit?
-            'UPDATE public.artae_messages SET body=$4,edited_at=$5 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *':
+            'UPDATE public.artae_messages SET body=$3,edited_at=$4,edited_by=$5 WHERE id=$1 AND conversation_id=$2 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $6::bigint RETURNING *':
             'UPDATE public.artae_messages SET body=\'\',deleted_at=$4 WHERE id=$1 AND conversation_id=$2 AND author_id=$3 AND deleted_at IS NULL AND edited_at IS NOT DISTINCT FROM $5::bigint RETURNING *',
           isEdit?
-            [body.id,body.convo,session.user.id,value,stamp,revision]:
+            [body.id,body.convo,value,stamp,session.user.id,revision]:
             [body.id,body.convo,session.user.id,stamp,revision]
         );
         if(!changed||isEdit)return changed;
