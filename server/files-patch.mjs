@@ -458,7 +458,7 @@ css+='\n'+String.raw`
 `;
 // Projects list becomes a floating drawer when there is room for columns.
 // Phones keep their existing full-screen project navigation.
-css+='\\n'+String.raw`
+css+='\n'+String.raw`
 .projectsDrawerToggle{display:none;border:1px solid #d2dce9;border-radius:10px;background:#fff;color:#314b69;min-width:38px;height:38px;font:22px/1 system-ui;cursor:pointer;align-items:center;justify-content:center;flex:none}
 .projectsDrawerToggle:hover,.projectsDrawerToggle:focus-visible{background:#eef5fc}
 .projectsDrawerScrim{display:none}
