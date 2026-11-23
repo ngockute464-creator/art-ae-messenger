@@ -453,4 +453,37 @@ css+='\n'+String.raw`
  }
 }
 `;
+// Projects list becomes a floating drawer when there is room for columns.
+// Phones keep their existing full-screen project navigation.
+css+='\\n'+String.raw`
+.projectsDrawerToggle{display:none;border:1px solid #d2dce9;border-radius:10px;background:#fff;color:#314b69;min-width:38px;height:38px;font:22px/1 system-ui;cursor:pointer;align-items:center;justify-content:center;flex:none}
+.projectsDrawerToggle:hover,.projectsDrawerToggle:focus-visible{background:#eef5fc}
+.projectsDrawerScrim{display:none}
+@media(min-width:651px){
+ .app .projectsDrawerToggle{display:inline-flex}
+ .app .workspace{grid-template-columns:minmax(0,1fr)!important;position:relative;isolation:isolate}
+ .app .workspace>.main{grid-column:1;min-width:0}
+ .app .workspace>.projectGrip{display:none}
+ .app .workspace>.sidebar{
+  position:absolute;left:0;top:0;bottom:0;z-index:22;
+  box-sizing:border-box;width:min(320px,calc(100% - 56px));height:100%;
+  border-right:1px solid #dce5f1;box-shadow:10px 0 25px rgba(30,50,80,.14);
+  transform:translateX(-105%);visibility:hidden;pointer-events:none;
+  transition:transform .18s ease,visibility .18s;background:#fff;
+ }
+ .app.projects-drawer-open .workspace>.sidebar{
+  transform:translateX(0);visibility:visible;pointer-events:auto;
+ }
+ .app.projects-drawer-open .projectsDrawerScrim{
+  display:block;position:absolute;inset:0;z-index:21;
+  border:0;background:rgba(18,33,53,.25);cursor:pointer;
+ }
+}
+@media(max-width:650px){
+ .projectsDrawerToggle,.projectsDrawerScrim{display:none!important}
+}
+@media(prefers-reduced-motion:reduce){
+ .app .workspace>.sidebar{transition:none}
+}
+`;
 writeFileSync(cssFile,css);
