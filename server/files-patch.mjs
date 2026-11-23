@@ -22,7 +22,8 @@ const chatMediaClient=readFileSync('server/chat-media-client.js','utf8');
 const pdfViewerClient=readFileSync('server/pdf-viewer-client.js','utf8');
 const messageMenuClient=readFileSync('server/message-menu-client.js','utf8');
 const focusGuardClient=readFileSync('server/composer-focus-guard.js','utf8');
-replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+labelsClient+'\n'+avatarsClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+chatMediaClient+'\n'+pdfViewerClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\nfunction cp(){','client and resize functions');
+const projectsDrawerClient=readFileSync('server/projects-drawer.js','utf8');
+replace('function cp(){',client+'\n'+resizeClient+'\n'+uxClient+'\n'+labelsClient+'\n'+avatarsClient+'\n'+mentionsClient+'\n'+officeClient+'\n'+reliableSend+'\n'+composerClient+'\n'+voiceClient+'\n'+transcriptClient+'\n'+chatFileClient+'\n'+chatMediaClient+'\n'+pdfViewerClient+'\n'+messageMenuClient+'\n'+focusGuardClient+'\n'+projectsDrawerClient+'\nfunction cp(){','client and resize functions');
 
  // Capture the version when entering edit mode (not at save time).
 replace("editing={messageId:id,text:m.text,files:","editing={messageId:id,baseEditedAt:m.editedAt??null,text:m.text,files:",'edit baseline');
@@ -137,6 +138,20 @@ replace("function messageView(m){let fs=","function messageView(m){const authorA
 replace("${isMine(m)&&data.profile.avatar?`<img class=\"avatar\" src=\"${esc(data.profile.avatar)}\" alt=\"\">`:`<span class=\"avatar\">","${authorAvatar?`<img class=\"avatar\" src=\"${esc(authorAvatar)}\" alt=\"\">`:`<span class=\"avatar\">","shared avatar for all authors");
 replace("if(!val)return alert('Введите ник');data.profile={nickname:val,avatar:m.avatar||null};persist();","if(!val)return alert('Введите ник');await saveOwnAvatar(m.avatar||null);data.profile={nickname:val,avatar:m.avatar||null};persist();","sync profile photo on save");
 replace("Ник и аватар хранятся на этом устройстве. Серверное имя автора сообщений задаётся администратором.","Ник хранится на этом устройстве; аватар виден всем участникам. Серверное имя автора сообщений задаётся администратором.","profile UI description");
+// Shared message actions and desktop project drawer.
+const actionStart=app.indexOf('function objectActions(');
+const actionEnd=app.indexOf('function messageView(',actionStart);
+if(actionStart<0||actionEnd<0||app.indexOf('function objectActions(',actionStart+1)!==-1)throw Error('Message action menu anchor mismatch');
+app=app.slice(0,actionStart)+readFileSync('server/shared-message-actions.js','utf8')+'\n'+app.slice(actionEnd);
+replace("${mine?actionMenu('message:'+m.id,objectActions('message',m.id,c.id,mine)):''}","${actionMenu('message:'+m.id,objectActions('message',m.id,c.id,mine))}","other authors can open message menu");
+replace("if(!isMine(m))return;editing={messageId:id,","if(!m||m.deletedAt)return;editing={messageId:id,","other authors can begin editing");
+replace("if(!isMine(m))return;\n const text=$('editText')","if(!m||m.deletedAt)return;\n const text=$('editText')","other authors can save edits");
+replace("function datefmt(t){return new Date(t).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}","function datefmt(t){return new Date(t).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}","display message date with time");
+replace("<div class=\"app mobile-${view}${railCollapsed?' rail-collapsed':''}\">","<div class=\"app mobile-${view}${railCollapsed?' rail-collapsed':''}${projectsDrawerOpen?' projects-drawer-open':''}\">","desktop drawer state");
+replace("<header class=\"top\"><button type=\"button\" class=\"brand brandHome\"","<header class=\"top\"><button type=\"button\" class=\"projectsDrawerToggle\" data-act=\"projectsDrawerToggle\" aria-label=\"Показать проекты\" aria-controls=\"artaeProjectsDrawer\" aria-expanded=\"${projectsDrawerOpen?'true':'false'}\" title=\"Проекты\">☰</button><button type=\"button\" class=\"brand brandHome\"","desktop projects toggle");
+replace("<div class=\"workspace\">${sidebar()}","<div class=\"workspace\">${sidebar()}<button type=\"button\" class=\"projectsDrawerScrim\" data-act=\"projectsDrawerClose\" aria-label=\"Закрыть проекты\" tabindex=\"-1\"></button>","desktop drawer backdrop");
+replace("<aside class=\"sidebar\">${data.projects.map","<aside class=\"sidebar\" id=\"artaeProjectsDrawer\">${data.projects.map","desktop sidebar id");
+replace("if(action==='railTab'){","if(action==='projectsDrawerToggle'){toggleProjectsDrawer();return}if(action==='projectsDrawerClose'){closeProjectsDrawer();return}if(action==='railTab'){","desktop drawer actions");
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
