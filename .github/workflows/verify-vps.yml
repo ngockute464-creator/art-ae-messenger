@@ -52,6 +52,7 @@ jobs:
           node migration/tests/test-push-artifacts.mjs
           node migration/tests/test-push-controls.mjs
           node migration/tests/test-push-defaults.mjs
+          node migration/tests/test-push-onboarding-recovery.mjs
           node migration/tests/test-brand-identity.mjs
           test -s migration/sql/004_web_push.sql
           grep -q "artaePushControls" public/push-client.js
