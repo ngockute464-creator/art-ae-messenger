@@ -16,7 +16,7 @@ function toggleMessageMenuDom(button){
   const message=key.startsWith('message:')
    ?data.messages.find(m=>m.id===itemId)
    :data.messages.find(m=>m.id===data.files.find(f=>f.id===itemId)?.message);
-  if(!message||!isMine(message)){openMenu=null;return}
+  if(!message||(key.startsWith('file:')&&!isMine(message))){openMenu=null;return}
   markup=messageView(message);
  }else if(key.startsWith('pin:')){
   const pin=data.pins.find(p=>p.id===key.slice(4));
