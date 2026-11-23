@@ -177,33 +177,56 @@ function mountPush(panel){
  void sync();
 }
 window.ARTAE_PUSH_MOUNT=mountPush;
-// Offer notifications on first authenticated use. The permission prompt must
-// originate from the user's explicit button click, including in iOS PWA.
+// Initial push state must never fail silently: show a recoverable status when
+// the server or subscription fails, but never request permission without a click.
 let pushWelcomeShown=false,pushDeferredForSession=false,pushAutoBusy=false,pushAutoReady=false;
-function removePushWelcome(){document.querySelector?.('#artaePushWelcome')?.remove?.()}
-function createPushWelcome(){
- if(pushWelcomeShown||pushDeferredForSession)return;
+let pushWelcomeMode=null;
+function removePushWelcome(){
+ document.querySelector?.('#artaePushWelcome')?.remove?.();
+ pushWelcomeMode=null;
+}
+function createPushWelcome(mode='invite',detail=''){
+ if(pushDeferredForSession||pushChoice(PUSH_OPT_OUT))return;
  if(!document.createElement||!document.body)return;
- pushWelcomeShown=true;
+ const previous=document.querySelector?.('#artaePushWelcome');
+ if(previous&&pushWelcomeMode===mode&&mode==='invite')return;
+ if(previous)previous.remove();
+ pushWelcomeShown=true;pushWelcomeMode=mode;
  const box=document.createElement('div');box.id='artaePushWelcome';
  box.setAttribute('role','region');box.setAttribute('aria-label','Уведомления');
  const message=document.createElement('span');
- message.textContent='Получать уведомления о новых сообщениях?';
- const yes=document.createElement('button');yes.type='button';yes.textContent='Включить';
+ message.textContent=mode==='invite'
+  ?'Получать уведомления о новых сообщениях?'
+  :'Уведомления не подключены: '+(detail||'не удалось проверить настройки');
+ const yes=document.createElement('button');yes.type='button';
+ yes.textContent=mode==='invite'?'Включить':'Повторить';
  const later=document.createElement('button');later.type='button';later.textContent='Не сейчас';
  box.append(message,yes,later);
- yes.addEventListener('click',async()=>{
-  // User activation is still active at this synchronous permission call.
-  const permission=Notification.permission==='granted'?'granted':await Notification.requestPermission();
-  if(permission!=='granted'){pushDeferredForSession=true;removePushWelcome();return}
-  try{
-   await establishPush();pushAutoReady=true;
-   savePushChoice(PUSH_OPT_OUT,false);
-   pushDeferredForSession=false;
+ yes.addEventListener('click',()=>{
+  if(mode!=='invite'){
    removePushWelcome();
-  }catch(error){
-   message.textContent='Не удалось подключить уведомления: '+String(error?.message||error);
+   void offerDefaultPush(true);
+   return;
   }
+  // The system prompt MUST be called synchronously from this click.
+  const approval=Notification.permission==='granted'
+   ?Promise.resolve('granted'):Notification.requestPermission();
+  void Promise.resolve(approval).then(async permission=>{
+   if(permission!=='granted'){
+    pushDeferredForSession=true;removePushWelcome();return;
+   }
+   message.textContent='Подключаем уведомления…';
+   yes.disabled=true;
+   try{
+    await establishPush();
+    pushAutoReady=true;
+    savePushChoice(PUSH_OPT_OUT,false);
+    pushDeferredForSession=false;
+    removePushWelcome();
+   }catch(error){
+    createPushWelcome('error',String(error?.message||error));
+   }
+  }).catch(error=>createPushWelcome('error',String(error?.message||error)));
  });
  later.addEventListener('click',()=>{
   pushDeferredForSession=true;
@@ -211,25 +234,41 @@ function createPushWelcome(){
  });
  document.body.append(box);
 }
-async function offerDefaultPush(){
+async function offerDefaultPush(force=false){
  if(pushAutoReady||pushAutoBusy||!supported()||pushChoice(PUSH_OPT_OUT))return;
  if(isIOS()&&!standalone())return;
- // Do not show any invitation before the user is logged in and the app renders.
- if(!document.querySelector?.('.app'))return;
+ // Authentication renders .app. Avoid permission/config requests on the login screen.
+ if(!document.querySelector?.('.app')||document.hidden)return;
  if(Notification.permission==='denied'){removePushWelcome();return}
+ if(pushDeferredForSession&&!force)return;
  pushAutoBusy=true;
  try{
   if(Notification.permission==='granted'){
    await establishPush();pushAutoReady=true;removePushWelcome();
-  }else if(!pushWelcomeShown&&!pushDeferredForSession){
+  }else{
+   // Check VAPID before recommending permission. An unavailable service must
+   // be visible instead of silently suppressing the entire invitation.
    const config=await request('config');
-   if(config?.enabled)createPushWelcome();
+   if(!config?.enabled||!config.publicKey)
+    createPushWelcome('error','сервер Push пока не настроен');
+   else createPushWelcome('invite');
   }
- }catch(error){console.warn('ART-AE default push:',error?.message||error)}
- finally{pushAutoBusy=false}
+ }catch(error){
+  console.warn('ART-AE default push:',error?.message||error);
+  createPushWelcome('error',String(error?.message||error));
+ }finally{pushAutoBusy=false}
 }
-setTimeout(()=>{void offerDefaultPush()},3500);
-setInterval(()=>{void offerDefaultPush()},15000);
+// The first attempt should run as soon as the authenticated shell exists;
+// a periodic fallback covers delayed login and application startup on mobiles.
+setTimeout(()=>{void offerDefaultPush()},1200);
+setInterval(()=>{void offerDefaultPush()},5000);
+if(typeof MutationObserver!=='undefined'){
+ const observer=new MutationObserver(()=>{
+  if(!document.querySelector?.('.app')){pushAutoReady=false;return}
+  if(!pushAutoReady&&!pushWelcomeMode)void offerDefaultPush();
+ });
+ observer.observe(document.body,{childList:true,subtree:false});
+}
 const welcomeStyle=document.createElement('style');
 welcomeStyle.textContent='#artaePushWelcome{position:fixed;left:50%;top:75px;transform:translateX(-50%);z-index:10000;display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 15px;width:max-content;max-width:calc(100vw - 28px);box-sizing:border-box;border:1px solid #c9d8ec;border-radius:12px;background:#fff;color:#24354b;box-shadow:0 7px 25px #2233;font:14px system-ui}#artaePushWelcome span{flex:1 1 170px}#artaePushWelcome button{border:1px solid #bed0e9;border-radius:7px;background:#eef5ff;color:#245eaa;padding:8px 12px;cursor:pointer}';
 document.head.append(welcomeStyle);
