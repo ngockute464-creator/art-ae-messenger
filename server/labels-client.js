@@ -37,10 +37,18 @@ async function refreshSharedLabels(force=false){
   const response=await labelsRequest('',{project:target},true);
   if(project!==target)return;
   const shared=(response.labels||[]).map(l=>({...l,project:target}));
-  // Drop stale copies of this project's labels, not labels for other projects.
-  data.labels=data.labels.filter(l=>l.project!==target).concat(shared);
+  // Polling must not replace the entire chat when the label set is unchanged.
+  // Normalize order and compare only fields used by the UI (not server metadata).
+  const signature=rows=>JSON.stringify(rows.map(l=>[l.kind,l.item,l.name])
+   .sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b))));
+  const previous=data.labels.filter(l=>l.project===target);
+  const changed=signature(previous)!==signature(shared);
+  if(changed){
+   // Keep other projects' cached labels intact.
+   data.labels=data.labels.filter(l=>l.project!==target).concat(shared);
+  }
   labelsProject=target;labelsLastFetch=Date.now();
-  if(!modal&&!editing&&document.activeElement?.id!=='draft')render();
+  if(changed&&!modal&&!editing&&document.activeElement?.id!=='draft')render();
  }catch(error){console.warn('Shared labels:',error.message)}
  finally{
   labelsBusy=false;
