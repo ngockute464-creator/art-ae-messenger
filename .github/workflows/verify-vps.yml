@@ -40,7 +40,6 @@ jobs:
           test -s public/sw.js
           test -s public/app.js
           node --check public/app.js
-          node -e "const s=require('fs').readFileSync('public/app.js','utf8');for(const key of ['function objectActions(','function messageView(','function actionMenu(','function sidebar(','function beginEditMessage(','function deleteMessageById(','function messageTimestamp(','function formatDate(','function isMine=','function pinned(','function pinIndicator(']){let i=s.indexOf(key);console.log('FEATURE_DETAIL',key,JSON.stringify(i<0?'missing':s.slice(i,i+2800)))}"
           node --check public/sw.js
           node --check public/pwa-client.js
           node --check server/pwa-safety-patch.mjs
@@ -77,6 +76,9 @@ jobs:
           node migration/tests/test-office-native-readonly.mjs
           node migration/tests/test-office-xlsm-preview.mjs
           node migration/tests/test-pinned-navigation.mjs
+          node migration/tests/test-shared-message-actions.mjs
+          node migration/tests/test-projects-drawer.mjs
+          node --check migration/runtime/sync.mjs
           node migration/tests/test-shared-labels.mjs
           node migration/tests/test-label-project-switch.mjs
           node migration/tests/test-shared-avatars.mjs
@@ -136,6 +138,7 @@ jobs:
           bash -n migration/deploy/apply-message-reads.sh
           bash -n migration/deploy/apply-shared-labels.sh
           bash -n migration/deploy/apply-shared-avatars.sh
+          bash -n migration/deploy/apply-shared-message-edits.sh
           bash -n migration/deploy/bootstrap-push.sh
           bash -n migration/deploy/apply-message-erasure.sh
           bash -n migration/deploy/bootstrap-chat-file-deletions.sh
@@ -199,3 +202,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f migration/sql/008_shared_avatars.sql
           psql -v ON_ERROR_STOP=1 -c "SET ROLE artae_app; SELECT count(avatar) FROM public.artae_users; RESET ROLE;"
           echo 'SHARED_AVATARS_POSTGRES_OK migration_twice=true runtime_grants=true'
+          psql -v ON_ERROR_STOP=1 -f migration/sql/009_shared_message_edits.sql
+          psql -v ON_ERROR_STOP=1 -f migration/sql/009_shared_message_edits.sql
+          psql -v ON_ERROR_STOP=1 -c "SET ROLE artae_app; SELECT count(edited_by),count(edited_by_name) FROM public.artae_messages; RESET ROLE;"
+          psql -At -c "SELECT count(*) FROM public.artae_schema_migrations WHERE version='009_shared_message_edits'" | grep -qx 1
+          echo 'SHARED_MESSAGE_EDITS_POSTGRES_OK migration_twice=true runtime_grants=true'
