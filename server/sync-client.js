@@ -1,8 +1,12 @@
 // E1 paginated sync: never commit a partial cursor.
 let syncPending=false;
+let activeMessageSync=null;
 async function syncMessages(force=false){
  if(!convo||document.hidden)return;
- if(syncBusy){if(force)syncPending=true;return}
+ if(activeMessageSync?.id===convo){if(force)syncPending=true;return}
+ if(activeMessageSync){activeMessageSync.controller.abort();syncPending=false}
+ const syncTask={id:convo,controller:new AbortController()};
+ activeMessageSync=syncTask;
  syncBusy=true;const id=convo;
  try{
   const since=lastMessageCursor[id]||0,all=[];let next=null,first=null,finalCursor=null;
@@ -10,7 +14,7 @@ async function syncMessages(force=false){
    if(convo!==id)return;
    const opts={action:'messages',convo:id,paging:'1'};
    if(since)opts.since=String(since);if(next)opts.page=next;
-   const response=await fetch('/.netlify/functions/sync?'+new URLSearchParams(opts),{credentials:'same-origin',cache:'no-store'});
+   const response=await fetch('/.netlify/functions/sync?'+new URLSearchParams(opts),{credentials:'same-origin',cache:'no-store',signal:syncTask.controller.signal});
    const result=await response.json();
    if(!response.ok)throw Error(result.error||'Не удалось получить сообщения');
    if(!Array.isArray(result.messages)||!Number.isSafeInteger(result.cursor))throw Error('Некорректный ответ синхронизации');
@@ -38,6 +42,15 @@ async function syncMessages(force=false){
     list.scrollTop=atBottom?list.scrollHeight:scroll;
    }else render();
   }
- }catch(error){syncLastError=String(error.message||error);console.warn('Message sync',error)}
- finally{syncBusy=false;if(convo&&(convo!==id||syncPending)){syncPending=false;queueMicrotask(()=>syncMessages(true))}}
+ }catch(error){
+  if(error?.name!=='AbortError'){
+   syncLastError=String(error.message||error);
+   console.warn('Message sync',error);
+  }
+ }finally{
+  if(activeMessageSync===syncTask){
+   activeMessageSync=null;syncBusy=false;
+   if(convo&&syncPending){syncPending=false;queueMicrotask(()=>syncMessages(true))}
+  }
+ }
 }
