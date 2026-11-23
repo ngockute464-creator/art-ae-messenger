@@ -152,6 +152,9 @@ replace("<header class=\"top\"><button type=\"button\" class=\"brand brandHome\"
 replace("<div class=\"workspace\">${sidebar()}","<div class=\"workspace\">${sidebar()}<button type=\"button\" class=\"projectsDrawerScrim\" data-act=\"projectsDrawerClose\" aria-label=\"Закрыть проекты\" tabindex=\"-1\"></button>","desktop drawer backdrop");
 replace("<aside class=\"sidebar\">${data.projects.map","<aside class=\"sidebar\" id=\"artaeProjectsDrawer\">${data.projects.map","desktop sidebar id");
 replace("if(action==='railTab'){","if(action==='projectsDrawerToggle'){toggleProjectsDrawer();return}if(action==='projectsDrawerClose'){closeProjectsDrawer();return}if(action==='railTab'){","desktop drawer actions");
+replace("${m.editedAt?' · Изменено':''}",
+        "${m.editedAt?' · Изменено'+(m.editedByName?' ('+esc(m.editedByName)+')':''):''}",
+        'show the last editor without changing the original author');
 writeFileSync(path,app);
 const cssFile='public/styles.css';
 let css=readFileSync(cssFile,'utf8');
