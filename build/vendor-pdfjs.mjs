@@ -4,6 +4,9 @@ import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const VERSION='6.5.438';
 const OUT='public/vendor/pdfjs';
+// Reuse the last installed release before contacting a CDN. Every cached byte
+// must pass the same exact version, size, content and SHA-256 checks.
+const CACHE=process.env.ARTAE_PDFJS_CACHE_DIR||'/opt/artae/work/public/vendor/pdfjs';
 const ASSETS=[
  {name:'pdf.mjs',min:350000,max:4000000,expectedSha256:'2792b7c390ad6d5f4245d326b70deebbc990fa4bcac691412f6df886abb9e867'},
  {name:'pdf.worker.mjs',min:600000,max:7000000,expectedSha256:'8336aabf764cb08c818555a2fd2545e4fed10837146de927564875c93b3c4f83'},
@@ -27,6 +30,14 @@ function verify(bytes,asset){
 async function retrieve(asset){
  const target=OUT+'/'+asset.name;
  try{if(verify(readFileSync(target),asset))return}catch{}
+ try{
+  const bytes=readFileSync(CACHE+'/'+asset.name);
+  if(verify(bytes,asset)){
+   writeFileSync(target,bytes);
+   console.log('PDFJS_VENDOR_REUSED '+asset.name+' from verified release cache');
+   return;
+  }
+ }catch{}
  let last;
  for(const urlOf of providers){
   try{
