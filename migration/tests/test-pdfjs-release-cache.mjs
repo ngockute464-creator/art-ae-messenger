@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const source=readFileSync('build/vendor-pdfjs.mjs','utf8');
+const iLocal=source.indexOf('if(verify(readFileSync(target),asset))return');
+const iCache=source.indexOf('const bytes=readFileSync(CACHE');
+const iVerified=source.indexOf('if(verify(bytes,asset))',iCache);
+const iDownload=source.indexOf('for(const urlOf of providers)');
+assert.ok(iLocal>=0&&iLocal<iCache,'Bundled assets must be preferred');
+assert.ok(iCache<iVerified&&iVerified<iDownload,'Release cache must be verified before CDN fallback');
+assert.match(source,/expectedSha256:/);
+assert.match(source,/sha!==asset.expectedSha256/);
+assert.match(source,/PDFJS_VENDOR_REUSED/);
+assert.match(source,/ARTAE_PDFJS_CACHE_DIR/);
+console.log('PDFJS_RELEASE_CACHE_TEST_OK verified_local_first=true sha256_cache=true cdn_fallback=true');
