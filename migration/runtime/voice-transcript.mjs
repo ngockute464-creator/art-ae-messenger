@@ -8,6 +8,26 @@ const MAX_WAV=1280*1024;
 const reply=(obj,status=200)=>Response.json(obj,{status,headers:{'Cache-Control':'private,no-store','X-Content-Type-Options':'nosniff'}});
 const fail=(msg,status=400)=>Object.assign(Error(msg),{status});
 const originOk=r=>{try{return new URL(r.headers.get('origin')).origin===new URL(r.url).origin}catch{return false}};
+
+// Do not log URLs, paths, audio, transcript text, credentials or request bodies.
+async function upstream(stage,url,options,timeoutMs){
+ const started=Date.now();
+ try{
+  const response=await fetch(url,{...options,signal:AbortSignal.timeout(timeoutMs)});
+  const elapsed=Date.now()-started;
+  if(!response.ok&&![404,409,412].includes(response.status))
+   console.warn('ARTAE transcript upstream',stage,'http='+response.status,'elapsed_ms='+elapsed);
+  else if(elapsed>2500)
+   console.info('ARTAE transcript upstream slow',stage,'http='+response.status,'elapsed_ms='+elapsed);
+  return response;
+ }catch(error){
+  console.error('ARTAE transcript upstream failed',stage,
+   'elapsed_ms='+(Date.now()-started),'limit_ms='+timeoutMs,
+   'error='+(error?.name||'unknown'));
+  throw error;
+ }
+}
+
 function config(){
  const token=process.env.YANDEX_DISK_TOKEN;
  if(!token)throw fail('Яндекс Диск не подключён',503);
@@ -35,7 +55,7 @@ function transferUrl(href){
 async function transfer(href,opts={}){
  let url=transferUrl(href);
  for(let i=0;i<5;i++){
-  const res=await fetch(url,{...opts,redirect:'manual',signal:AbortSignal.timeout(20000)});
+  const res=await upstream('yandex-transfer '+(opts.method||'GET'),url,{...opts,redirect:'manual'},20000);
   if([301,302,303,307,308].includes(res.status)){
    const loc=res.headers.get('location');if(!loc)throw fail('Ошибка передачи файла',502);
    url=transferUrl(new URL(loc,url).href);continue;
@@ -47,7 +67,7 @@ async function transfer(href,opts={}){
 async function disk(method,resource,params={}){
  const {token}=config(),url=new URL(YD+resource);
  for(const [k,v]of Object.entries(params))url.searchParams.set(k,v);
- const res=await fetch(url,{method,headers:{Authorization:'OAuth '+token},signal:AbortSignal.timeout(12000)});
+ const res=await upstream('yandex-disk '+method+' '+resource,url,{method,headers:{Authorization:'OAuth '+token}},12000);
  if(res.status===404)return null;
  if(res.status===409)return {conflict:true};
  if(!res.ok)throw fail('Яндекс Диск временно недоступен',502);
@@ -103,8 +123,8 @@ async function cloudflare(wav){
  const account=process.env.CLOUDFLARE_ACCOUNT_ID,token=process.env.CLOUDFLARE_AI_TOKEN;
  if(!/^[a-f0-9]{32}$/i.test(account||'')||!token)throw fail('Расшифровка ещё не подключена',503);
  const url='https://api.cloudflare.com/client/v4/accounts/'+account+'/ai/run/@cf/openai/whisper-large-v3-turbo';
- const response=await fetch(url,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-  body:JSON.stringify({audio:wav.toString('base64'),task:'transcribe'}),signal:AbortSignal.timeout(24000)});
+ const response=await upstream('cloudflare-whisper',url,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  body:JSON.stringify({audio:wav.toString('base64'),task:'transcribe'})},24000);
  if(response.status===429)return Promise.reject(fail('Бесплатная квота расшифровки временно исчерпана',429));
  if(!response.ok){console.error('ARTAE Whisper upstream',response.status);throw fail('Cloudflare не смог обработать аудио',502)}
  let payload;try{payload=await response.json()}catch{throw fail('Неверный ответ Whisper',502)}
